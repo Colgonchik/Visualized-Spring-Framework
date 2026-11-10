@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.16</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.visualsb</groupId>
+    <artifactId>visual-sb</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>Visual SB</name>
+    <description>Магия Spring Framework под капотом: запускаемые примеры, диаграммы, трассировки</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <modules>
+        <module>01-core/01-component-scan</module>
+        <module>01-core/02-bean-definition</module>
+        <module>01-core/03-bean-lifecycle</module>
+        <module>01-core/04-beanpostprocessor</module>
+        <module>01-core/05-aop-proxies</module>
+        <module>02-boot/01-autoconfiguration</module>
+        <module>02-boot/02-conditional</module>
+        <module>02-boot/03-starters</module>
+        <module>02-boot/04-conditions-report</module>
+        <module>03-web/01-dispatcher-servlet</module>
+        <module>04-data/01-jpa-transactions</module>
+        <module>05-security/01-filter-chain</module>
+    </modules>
+</project>
