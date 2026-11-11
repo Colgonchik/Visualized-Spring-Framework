@@ -130,6 +130,52 @@ test('Conditions: провал property прячет бин, отчёт счит
   await expect(page.locator('.log-entry').filter({ hasText: 'Уступает пользовательскому бину' })).toBeVisible();
 });
 
+test('Sequence: диаграмма последовательности синхронизирована с журналом', async ({ page }) => {
+  await page.goto('/#request');
+  await page.getByRole('tab', { name: 'Последовательность' }).click();
+  await expect(page.locator('.sequence-empty')).toBeVisible();
+  for (let index = 0; index < 4; index += 1) await next(page).click();
+  // диаграмма показывает весь маршрут: будущие шаги приглушены
+  await expect(page.locator('.sequence-svg .seq-row')).toHaveCount(10);
+  await expect(page.locator('.sequence-svg .seq-row').nth(3)).toHaveClass(/is-current/);
+  await expect(page.locator('.sequence-svg .seq-row').nth(4)).toHaveCSS('opacity', '0.32');
+  await page.locator('.sequence-svg .seq-row').filter({ hasText: 'Цепочка фильтров' }).click();
+  await expect(page.locator('.log-entry.is-current')).toContainText('Цепочка фильтров');
+  await expect(page.locator('.sequence-svg .seq-row.is-current')).toContainText('Цепочка фильтров');
+});
+
+test('Inspector: у узла показывается реальный код Java-модуля', async ({ page }) => {
+  await page.goto('/#proxies');
+  await page.getByTestId('rf__node-target').click();
+  await expect(page.locator('.code-snippet')).toContainText('КОД ИЗ МОДУЛЯ');
+  await expect(page.locator('.code-snippet pre')).toContainText('перевод');
+  await page.getByTestId('rf__node-commit').click();
+  await expect(page.locator('.code-snippet pre')).toContainText('doCommit');
+});
+
+test('Клавиатура: стрелки ходят по шагам трассировки', async ({ page }) => {
+  await page.goto('/#lifecycle');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.log-entry.is-current')).toContainText('Чертёж найден');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.log-entry.is-current')).toContainText('Объект создан');
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('.log-entry.is-current')).toContainText('Чертёж найден');
+});
+
+test('Песочница помнит изменённый граф после перезагрузки страницы', async ({ page }) => {
+  await page.goto('/#boot');
+  await page.getByRole('button', { name: 'Добавить Condition', exact: true }).click();
+  await expect(page.locator('.react-flow__node')).toHaveCount(9);
+  await page.reload();
+  await expect(page.locator('.react-flow__node')).toHaveCount(9);
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Сбросить сцену' }).click();
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
+  await page.reload();
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
+});
+
 test('Мобильная раскладка и справка доступны', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#request');

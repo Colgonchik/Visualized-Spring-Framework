@@ -89,11 +89,21 @@ h1 { font-size: clamp(26px, 2.35vw, 38px); font-weight: 500; letter-spacing: -1.
 .workspace { min-height: 0; flex: 1; display: flex; flex-direction: column; border: 1px solid #2c4032; border-radius: 11px; overflow: hidden; background: #0f1712; box-shadow: 0 15px 60px #00000016; }
 .canvas-topline { height: 43px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid #24372b; background: #111b15; }
 .canvas-title { display: flex; align-items: center; gap: 7px; font: 8px var(--mono); letter-spacing: 1.4px; color: #a7bca4; }
+.view-switch { display: flex; gap: 2px; margin-left: 12px; padding: 2px; background: #0d1512; border: 1px solid #24372b; border-radius: 6px; }
+.view-switch button { padding: 4px 10px; border-radius: 4px; font: 8px var(--mono); letter-spacing: .8px; text-transform: uppercase; color: #7d9181; }
+.view-switch button:hover { color: #b8cfae; }
+.view-switch button.is-active { background: #25361c; color: var(--lime); }
+.view-switch button.is-active[aria-selected="true"] { color: var(--lime); }
 .canvas-actions { display: flex; align-items: center; gap: 12px; }
 .scene-badge { font: 9px var(--mono); color: #829d81; padding: 4px 7px; background: #19251b; border: 1px solid #2a3c2b; border-radius: 4px; }
 .icon-button { width: 28px; height: 28px; padding: 0; display: inline-grid; place-items: center; background: #17221a; color: #a7b9a8; border: 1px solid #314336; border-radius: 5px; transition: color .2s, border-color .2s, background .2s; }
 .icon-button:hover:not(:disabled) { color: var(--lime); border-color: #5b7549; background: #24311f; }
 .sandbox-canvas { position: relative; min-height: 240px; flex: 1; background: radial-gradient(ellipse at 45% 50%, #17271b50, transparent 80%), #0e1611; }
+.sequence-wrap { flex: 1; min-height: 240px; overflow: auto; background: radial-gradient(ellipse at 45% 30%, #17271b40, transparent 75%), #0c1310; }
+.sequence-svg { display: block; min-width: 100%; }
+.seq-row:hover .seq-message { stroke-width: 2.4; }
+.sequence-empty { height: 100%; min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #607b65; font-size: 11px; line-height: 1.7; text-align: center; padding: 24px; }
+.sequence-empty strong { color: #9fb795; font-size: 13px; font-weight: 600; }
 .react-flow__renderer { outline: none; }
 .react-flow__node { font-family: inherit; }
 .react-flow__node:focus-visible { outline: none; }
@@ -126,7 +136,7 @@ h1 { font-size: clamp(26px, 2.35vw, 38px); font-weight: 500; letter-spacing: -1.
 .react-flow__edge-path { stroke: #395440; stroke-width: 1.4; }
 .react-flow__edge:hover .react-flow__edge-path { stroke: #7c9b62; }
 .react-flow__edge.is-done .react-flow__edge-path { stroke: #577b4a; }
-.react-flow__edge.is-active .react-flow__edge-path { stroke: var(--lime); stroke-width: 2; filter: drop-shadow(0 0 3px #b8f34a60); }
+.react-flow__edge.is-active .react-flow__edge-path { stroke: var(--lime); stroke-width: 2.4; filter: drop-shadow(0 0 5px #b8f34a80); }
 .react-flow__edge.is-response .react-flow__edge-path { stroke: #7dd5ee; animation-direction: reverse; }
 .react-flow__controls { border-radius: 5px; overflow: hidden; box-shadow: none; border: 1px solid #344a39; }
 .react-flow__controls-button { width: 25px; height: 25px; background: #16221a; border-bottom: 1px solid #2b3f31; color: #a1b29e; }
@@ -210,6 +220,10 @@ h1 { font-size: clamp(26px, 2.35vw, 38px); font-weight: 500; letter-spacing: -1.
 .breakpoint, .source-path { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
 .breakpoint .eyebrow, .source-path .eyebrow { font-size: 7px; color: #708b65; }
 .breakpoint code, .source-path code { font: 9px var(--mono); line-height: 1.7; color: #b1c5a1; overflow-wrap: anywhere; }
+.code-snippet { margin-top: 18px; }
+.code-snippet > .eyebrow { display: block; font-size: 7px; color: #708b65; margin-bottom: 8px; overflow-wrap: anywhere; }
+.code-snippet pre { margin: 0; padding: 11px 12px; background: #0b120e; border: 1px solid #24372b; border-radius: 8px; overflow: auto; max-height: 230px; }
+.code-snippet pre code { font: 9.5px/1.75 var(--mono); color: #b9d3a8; white-space: pre; }
 .source-path code { color: #7f9a72; }
 .node-name-input { display: block; margin-bottom: 9px; }
 .node-name-input > span { display: block; font: 8px var(--mono); color: #728a66; margin-bottom: 6px; }

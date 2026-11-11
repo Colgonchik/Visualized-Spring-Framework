@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SCENES, applyOptions, createGraph } from '../src/data/scenes.js';
+import { getSnippet } from '../src/data/code.js';
 import { createSimulation, nodeStates } from '../src/lib/simulation.js';
+
+// Узлы, чей код живёт внутри самого Spring — в репозитории их нет.
+const SNIPPET_ALLOWLIST = new Set(['request:dispatcher']);
 
 function simulate(sceneId, options = {}) {
   const graph = createGraph(sceneId);
@@ -160,4 +164,20 @@ test('Состояния узлов соответствуют текущему 
   const states = nodeStates(graph.nodes, result.steps, 0);
   assert.equal(states.get('application'), 'active');
   assert.equal(states.get('ready'), 'idle');
+});
+
+test('У каждого узла сцен есть сниппет кода из Java-модуля', () => {
+  for (const [sceneId, scene] of Object.entries(SCENES)) {
+    for (const node of scene.nodes) {
+      const key = `${sceneId}:${node.id}`;
+      const snippet = getSnippet(sceneId, node.id);
+      if (SNIPPET_ALLOWLIST.has(key)) {
+        assert.equal(snippet, null, `${key} не должен иметь сниппета`);
+      } else {
+        assert.ok(snippet, `${key} — сниппет не найден`);
+        assert.ok(snippet.code.length > 20, `${key} — сниппет слишком короткий`);
+        assert.ok(snippet.file.length > 3, `${key} — не указан файл`);
+      }
+    }
+  }
 });

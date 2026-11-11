@@ -1,12 +1,44 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Sandbox from './components/Sandbox.jsx';
+import SequenceDiagram from './components/SequenceDiagram.jsx';
 import Icon, { NodeGlyph } from './components/Icon.jsx';
 import { PALETTE, SCENES, applyOptions, createGraph } from './data/scenes.js';
+import { getSnippet } from './data/code.js';
 import { createSimulation, nodeStates } from './lib/simulation.js';
+
+const STORAGE_PREFIX = 'visual-sb-graph-v1:';
 
 function sceneFromHash() {
   const id = window.location.hash.replace('#', '');
   return SCENES[id] ? id : 'boot';
+}
+
+function loadSceneState(sceneId) {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_PREFIX + sceneId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges) || !parsed.options || typeof parsed.options !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveSceneState(sceneId, state) {
+  try {
+    window.localStorage.setItem(STORAGE_PREFIX + sceneId, JSON.stringify(state));
+  } catch {
+    // хранилище недоступно — сцена просто не сохранится
+  }
+}
+
+function clearSceneState(sceneId) {
+  try {
+    window.localStorage.removeItem(STORAGE_PREFIX + sceneId);
+  } catch {
+    // ignore
+  }
 }
 
 function Toggle({ label, hint, checked, onChange, disabled = false }) {
@@ -42,13 +74,14 @@ function SceneSettings({ scene, options, onChange }) {
 function App() {
   const [sceneId, setSceneId] = useState(sceneFromHash);
   const [graph, setGraph] = useState(() => createGraph(sceneFromHash()));
-  const [nodes, setNodes] = useState(graph.nodes);
-  const [edges, setEdges] = useState(graph.edges);
-  const [options, setOptions] = useState({ ...SCENES[sceneFromHash()].defaults });
+  const [nodes, setNodes] = useState(() => loadSceneState(sceneFromHash())?.nodes ?? graph.nodes);
+  const [edges, setEdges] = useState(() => loadSceneState(sceneFromHash())?.edges ?? graph.edges);
+  const [options, setOptions] = useState(() => loadSceneState(sceneFromHash())?.options ?? { ...SCENES[sceneFromHash()].defaults });
   const [trace, setTrace] = useState([]);
   const [cursor, setCursor] = useState(-1);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
+  const [viewMode, setViewMode] = useState('graph');
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [showLog, setShowLog] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
@@ -59,16 +92,18 @@ function App() {
   const finished = trace.length > 0 && cursor === trace.length - 1;
   const states = useMemo(() => nodeStates(nodes, trace, cursor), [nodes, trace, cursor]);
   const inspectedNode = nodes.find((item) => item.id === selectedNodeId) || nodes.find((item) => item.id === current?.nodeId);
+  const inspectedSnippet = inspectedNode ? getSnippet(sceneId, inspectedNode.id) : null;
   const note = scene.note(options);
 
   useEffect(() => {
     const syncScene = () => {
       const next = sceneFromHash();
       const nextGraph = createGraph(next);
+      const saved = loadSceneState(next);
       setSceneId(next);
-      setNodes(nextGraph.nodes);
-      setEdges(nextGraph.edges);
-      setOptions({ ...SCENES[next].defaults });
+      setNodes(saved?.nodes ?? nextGraph.nodes);
+      setEdges(saved?.edges ?? nextGraph.edges);
+      setOptions(saved?.options ?? { ...SCENES[next].defaults });
       setTrace([]);
       setCursor(-1);
       setPlaying(false);
@@ -81,6 +116,10 @@ function App() {
   useEffect(() => {
     document.title = `${scene.title} — Visual SB`;
   }, [scene.title]);
+
+  useEffect(() => {
+    saveSceneState(sceneId, { nodes, edges, options });
+  }, [sceneId, nodes, edges, options]);
 
   useEffect(() => {
     if (!playing || !trace.length || finished) {
@@ -96,12 +135,24 @@ function App() {
   }, [cursor, showLog]);
 
   useEffect(() => {
-    const close = (event) => {
-      if (event.key === 'Escape') setShowHelp(false);
+    const onKey = (event) => {
+      if (event.key === 'Escape') {
+        setShowHelp(false);
+        return;
+      }
+      if (showHelp) return;
+      if (event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        nextStep();
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        if (cursor > 0) chooseStep(cursor - 1);
+      }
     };
-    window.addEventListener('keydown', close);
-    return () => window.removeEventListener('keydown', close);
-  }, []);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   function resetPlayback() {
     setTrace([]);
@@ -154,6 +205,7 @@ function App() {
   function resetScene() {
     if (!window.confirm('Вернуть исходный граф и настройки этой сцены?')) return;
     const fresh = createGraph(sceneId);
+    clearSceneState(sceneId);
     setNodes(fresh.nodes);
     setEdges(fresh.edges);
     setOptions({ ...scene.defaults });
@@ -201,7 +253,7 @@ function App() {
           <span className="brand-mark"><Icon name="logo" size={27} /></span>
           <span><strong>VISUAL SB</strong><small>SPRING, БЕЗ МАГИИ</small></span>
         </a>
-        <div className="topbar-center"><span className="live-dot" />ИНТЕРАКТИВНАЯ ЛАБОРАТОРИЯ<span className="version">MVP 0.2</span></div>
+        <div className="topbar-center"><span className="live-dot" />ИНТЕРАКТИВНАЯ ЛАБОРАТОРИЯ<span className="version">MVP 0.3</span></div>
         <div className="topbar-right"><span className="proof">12 модулей <span>·</span> 43 теста</span><button className="text-button" onClick={() => setShowHelp(true)}><Icon name="info" size={16} />Как это работает</button></div>
       </header>
 
@@ -242,12 +294,22 @@ function App() {
 
           <section className="workspace" aria-label="Интерактивная песочница">
             <div className="canvas-topline">
-              <div className="canvas-title"><span className={`live-dot${playing ? ' is-pulsing' : ''}`} />{playing ? 'ВЫПОЛНЯЕТСЯ' : finished ? 'СЦЕНАРИЙ ЗАВЕРШЁН' : 'ГОТОВ К ЗАПУСКУ'}</div>
+              <div className="canvas-title">
+                <span className={`live-dot${playing ? ' is-pulsing' : ''}`} />{playing ? 'ВЫПОЛНЯЕТСЯ' : finished ? 'СЦЕНАРИЙ ЗАВЕРШЁН' : 'ГОТОВ К ЗАПУСКУ'}
+                <div className="view-switch" role="tablist" aria-label="Вид трассировки">
+                  <button role="tab" aria-selected={viewMode === 'graph'} className={viewMode === 'graph' ? 'is-active' : ''} onClick={() => setViewMode('graph')}>Граф</button>
+                  <button role="tab" aria-selected={viewMode === 'sequence'} className={viewMode === 'sequence' ? 'is-active' : ''} onClick={() => setViewMode('sequence')}>Последовательность</button>
+                </div>
+              </div>
               <div className="canvas-actions"><span className="scene-badge">{scene.badge(options)}</span><button className="icon-button" onClick={resetScene} title="Сбросить сцену" aria-label="Сбросить сцену"><Icon name="reset" size={16} /></button></div>
             </div>
-            <Sandbox sceneId={sceneId} nodes={nodes} edges={edges} trace={trace} cursor={cursor} nodeStates={states}
-              onNodesChange={setNodes} onEdgesChange={setEdges} onConnect={(next) => { setEdges(next); resetPlayback(); }}
-              onGraphEdit={resetPlayback} onDropNode={addNode} onSelectNode={setSelectedNodeId} onEditStart={() => setPlaying(false)} />
+            {viewMode === 'graph' ? (
+              <Sandbox sceneId={sceneId} nodes={nodes} edges={edges} trace={trace} cursor={cursor} nodeStates={states}
+                onNodesChange={setNodes} onEdgesChange={setEdges} onConnect={(next) => { setEdges(next); resetPlayback(); }}
+                onGraphEdit={resetPlayback} onDropNode={addNode} onSelectNode={setSelectedNodeId} onEditStart={() => setPlaying(false)} />
+            ) : (
+              <SequenceDiagram nodes={nodes} trace={trace} cursor={cursor} onSelect={chooseStep} />
+            )}
             <div className="playback">
               <button className={`run-button${playing ? ' is-playing' : ''}`} onClick={run}><Icon name={playing ? 'pause' : 'play'} size={16} />{playing ? 'Пауза' : finished ? 'Запустить снова' : trace.length ? 'Продолжить' : scene.verb}</button>
               <div className="step-buttons"><button className="icon-button" aria-label="Предыдущий шаг" disabled={cursor <= 0} onClick={() => chooseStep(cursor - 1)}><Icon name="previous" size={15} /></button><button className="icon-button" aria-label="Следующий шаг" disabled={finished} onClick={nextStep}><Icon name="next" size={15} /></button></div>
@@ -281,13 +343,14 @@ function App() {
               <div className="breakpoint"><span className="eyebrow">ТОЧКА ОСТАНОВА</span><code>{inspectedNode.data.breakpoint}</code></div>
               <div className="source-path"><span className="eyebrow">ИСТОЧНИК В ПРОЕКТЕ</span><code>{inspectedNode.data.source}</code></div>
               {selectedNodeId && <button className="delete-button" onClick={deleteSelected}><Icon name="trash" size={14} />Удалить узел</button>}
-            </div> : <div className="inspector-empty"><div className="empty-orbit"><Icon name="mouse" size={24} /></div><h2>Исследуйте граф</h2><p>Нажмите на узел, чтобы увидеть его роль, класс Spring и точку останова.</p><span><Icon name="link" size={14} />Потяните от точки на узле, чтобы создать связь</span></div>}
+              {inspectedSnippet && <div className="code-snippet"><span className="eyebrow">КОД ИЗ МОДУЛЯ · {inspectedSnippet.file}</span><pre><code>{inspectedSnippet.code}</code></pre></div>}
+            </div> : <div className="inspector-empty"><div className="empty-orbit"><Icon name="mouse" size={24} /></div><h2>Исследуйте граф</h2><p>Нажмите на узел, чтобы увидеть его роль, класс Spring, точку останова и код из модуля.</p><span><Icon name="link" size={14} />Потяните от точки на узле, чтобы создать связь</span></div>}
           </section>
           <section className="real-run"><div><span className="live-dot" /><strong>Нужен настоящий Spring?</strong></div><p>Запустите проверенный Java-модуль из корня проекта.</p><code>mvn -pl {scene.module} spring-boot:run</code><button onClick={copyCommand}><Icon name={copied ? 'check' : 'code'} size={14} />{copied ? 'Скопировано' : 'Копировать команду'}</button></section>
         </aside>
       </div>
 
-      {showHelp && <div className="modal-backdrop" onClick={() => setShowHelp(false)}><section className="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><button className="icon-button modal-close" aria-label="Закрыть" onClick={() => setShowHelp(false)}><Icon name="close" /></button><span className="eyebrow">VISUAL SB / КРАТКИЙ ТУР</span><h2 id="help-title">Не просто смотреть.<br />Собрать и сломать.</h2><div className="help-grid"><div><span>01</span><h3>Запустите сцену</h3><p>Play запускает маршрут. Пауза, стрелки и журнал позволяют исследовать каждый шаг.</p></div><div><span>02</span><h3>Измените условия</h3><p>Выключите property, добавьте свой бин или уберите credentials. Маршрут и исход изменятся.</p></div><div><span>03</span><h3>Постройте свой граф</h3><p>Добавляйте компоненты из палитры. Перетаскивайте узлы, соединяйте их точки и удаляйте через Delete.</p></div><div><span>04</span><h3>Проверьте в Java</h3><p>Это модель, а не JVM в браузере. Команда в панели запускает настоящий пример из репозитория.</p></div></div><button className="run-button" onClick={() => setShowHelp(false)}>В лабораторию<Icon name="arrow" size={16} /></button></section></div>}
+      {showHelp && <div className="modal-backdrop" onClick={() => setShowHelp(false)}><section className="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><button className="icon-button modal-close" aria-label="Закрыть" onClick={() => setShowHelp(false)}><Icon name="close" /></button><span className="eyebrow">VISUAL SB / КРАТКИЙ ТУР</span><h2 id="help-title">Не просто смотреть.<br />Собрать и сломать.</h2><div className="help-grid"><div><span>01</span><h3>Запустите сцену</h3><p>Play запускает маршрут. Пауза, стрелки ← → и журнал позволяют исследовать каждый шаг. Вид «Последовательность» показывает те же шаги как UML-диаграмму.</p></div><div><span>02</span><h3>Измените условия</h3><p>Выключите property, добавьте свой бин или уберите credentials. Маршрут и исход изменятся.</p></div><div><span>03</span><h3>Постройте свой граф</h3><p>Добавляйте компоненты из палитры. Перетаскивайте узлы, соединяйте их точки и удаляйте через Delete. Граф сохраняется в браузере.</p></div><div><span>04</span><h3>Проверьте в Java</h3><p>Это модель, а не JVM в браузере. Инспектор показывает код из реальных модулей, а команда в панели запускает настоящий пример.</p></div></div><button className="run-button" onClick={() => setShowHelp(false)}>В лабораторию<Icon name="arrow" size={16} /></button></section></div>}
     </div>
   );
 }
