@@ -23,6 +23,9 @@ export default function Icon({ name, size = 18, className = '' }) {
     mouse: <><rect x="6" y="2" width="12" height="20" rx="6" /><path d="M12 6v4" /></>,
     link: <><path d="m10 13 4-4m-6 7-2 2a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m4-2 2-2a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(1 1) scale(.9)" /></>,
     trash: <><path d="M3 6h18M9 6V3h6v3M5 6l1 16h12l1-16M10 10v8m4-8v8" /></>,
+    cycle: <><path d="M3 12a9 9 0 0 1 15.5-6.2M21 12a9 9 0 0 1-15.5 6.2" /><path d="M18.5 1.5v4.5H14M5.5 22.5v-4.5H10" /></>,
+    split: <><circle cx="5" cy="6" r="2.4" /><circle cx="5" cy="18" r="2.4" /><circle cx="19" cy="12" r="2.4" /><path d="M7.2 7.2 15.9 10.9M7.2 16.8 15.9 13.1" /></>,
+    sliders: <><path d="M4 8h9M19 8h1M4 16h3M13 16h7" /><circle cx="16" cy="8" r="2.2" /><circle cx="10" cy="16" r="2.2" /></>,
   };
   return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icons[name] || icons.box}</svg>;
 }
@@ -33,6 +36,10 @@ export function NodeGlyph({ kind, size = 18 }) {
     service: 'box', 'custom-bean': 'code', bpp: 'cpu', ready: 'check', client: 'globe', filter: 'shield',
     auth: 'shield', dispatcher: 'arrow', interceptor: 'link', controller: 'code', transaction: 'cpu',
     repository: 'layers', database: 'database', component: 'box',
+    'bean-definition': 'file', instantiate: 'box', populate: 'link', init: 'cycle', 'ready-bean': 'check',
+    caller: 'code', proxy: 'split', 'tx-interceptor': 'cpu', 'target-method': 'box', 'self-call': 'link', commit: 'check',
+    'condition-evaluator': 'sliders', 'condition-property': 'file', 'condition-class': 'layers',
+    'condition-bean': 'code', 'feature-service': 'box', report: 'file',
   };
   return <Icon name={names[kind] || 'box'} size={size} />;
 }

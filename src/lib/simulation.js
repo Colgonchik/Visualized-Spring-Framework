@@ -1,3 +1,5 @@
+import { SCENES } from '../data/scenes.js';
+
 function errorTrace(title, detail) {
   return { steps: [{ id: 'invalid', title, detail, status: 'error', nodeId: null, edgeIds: [] }], outcome: 'error' };
 }
@@ -53,6 +55,19 @@ function graphOrder(nodes, edges, startKind, targetKind) {
   return { ordered };
 }
 
+function toSteps(ordered, edges, mapper, options) {
+  const steps = [];
+  for (const item of ordered) {
+    const step = mapper(item, options);
+    step.id = `${item.id}-${steps.length}`;
+    step.edgeIds = edges.filter((link) => link.target === item.id).map((link) => link.id);
+    steps.push(step);
+  }
+  return steps;
+}
+
+const fallbackStep = (item) => ({ nodeId: item.id, status: 'success', edgeIds: [], title: item.data.label, detail: item.data.description || 'Пользовательский узел включён в маршрут.' });
+
 function bootStep(item, options) {
   const common = { nodeId: item.id, status: 'success', edgeIds: [] };
   const descriptions = {
@@ -84,7 +99,7 @@ function bootStep(item, options) {
     if (!options.enabled) return { ...common, status: 'error', title: 'Приложение не запустилось', detail: 'StarterReportRunner требует отсутствующий GreeterService — так устроен реальный Java-пример.' };
     return { ...common, title: 'Контекст готов', detail: 'StarterReportRunner может получить GreeterService и напечатать приветствие.' };
   }
-  return { ...common, title: item.data.label, detail: item.data.description || 'Пользовательский узел включён в маршрут.' };
+  return fallbackStep(item);
 }
 
 function requestStep(item, options) {
@@ -108,33 +123,129 @@ function requestStep(item, options) {
     const [title, detail] = descriptions[item.data.kind];
     return { ...common, title, detail };
   }
-  return { ...common, title: item.data.label, detail: item.data.description || 'Пользовательский узел включён в маршрут.' };
+  return fallbackStep(item);
 }
 
-export function createSimulation(sceneId, rawNodes, rawEdges, options) {
-  const nodes = rawNodes.filter((item) => !item.hidden);
-  const ids = new Set(nodes.map((item) => item.id));
-  const edges = rawEdges.filter((item) => !item.hidden && ids.has(item.source) && ids.has(item.target));
-  const startKind = sceneId === 'boot' ? 'application' : 'client';
-  const targetKind = sceneId === 'boot' ? 'ready' : 'database';
-  const { ordered, error } = graphOrder(nodes, edges, startKind, targetKind);
-  if (error) return error;
+function lifecycleStep(item, options) {
+  const common = { nodeId: item.id, status: 'success', edgeIds: [] };
+  const descriptions = {
+    'bean-definition': ['Чертёж найден', 'BeanDefinition LifeCycleBean получена из BeanFactory. Живого объекта ещё нет.'],
+    instantiate: ['Объект создан', 'createBeanInstance вызвал конструктор. @Autowired-поля пока null.'],
+    populate: ['Зависимости внедрены', 'populateBean заполнил поля. С этого шага зависимостями безопасно пользоваться.'],
+  };
+  if (descriptions[item.data.kind]) {
+    const [title, detail] = descriptions[item.data.kind];
+    return { ...common, title, detail };
+  }
+  if (item.data.kind === 'init') {
+    if (options.initFailure) {
+      return { ...common, status: 'error', title: 'Init-этап упал', detail: '@PostConstruct бросил исключение. Spring оборачивает его в BeanCreationException — бин не будет создан.' };
+    }
+    return { ...common, title: 'Инициализация завершена', detail: '@PostConstruct → afterPropertiesSet → customInit в фиксированном порядке. Порядок проверяется тестом модуля 03.' };
+  }
+  if (item.data.kind === 'bpp') {
+    if (options.proxyWrap) {
+      return { ...common, title: 'Бин обёрнут в прокси', detail: 'BeanPostProcessor вернул прокси вместо исходного объекта. В контексте живёт обёртка — так работает @Transactional (сцена 04).' };
+    }
+    return { ...common, title: 'Post-обработка завершена', detail: 'Бин прошёл postProcessAfterInitialization без изменений.' };
+  }
+  if (item.data.kind === 'ready-bean') {
+    if (options.initFailure) {
+      return { ...common, status: 'error', title: 'Контекст не поднялся', detail: 'Упавший singleton останавливает всё приложение — так же ведёт себя реальный модуль 03.' };
+    }
+    return { ...common, title: 'Бин готов', detail: options.proxyWrap
+      ? 'В контексте живёт прокси LifeCycleBean. Все вызовы идут через обёртку.'
+      : 'LifeCycleBean доступен остальным бинам. Порядок всех событий зафиксирован в LifecycleLog.' };
+  }
+  return fallbackStep(item);
+}
 
-  const mapper = sceneId === 'boot' ? bootStep : requestStep;
+function proxyStep(item, options) {
+  const common = { nodeId: item.id, status: 'success', edgeIds: [] };
+  if (item.data.kind === 'caller') {
+    return { ...common, title: 'Вызов принят прокси', detail: 'В переменной accountService лежит прокси. Вызов перехвачен до настоящего объекта.' };
+  }
+  if (item.data.kind === 'proxy') {
+    const detail = options.proxyType === 'jdk'
+      ? 'JDK-прокси: jdk.proxy2.$Proxy… реализует интерфейс бина. Без интерфейса этот тип невозможен.'
+      : 'CGLIB-прокси: AccountServiceImpl$$SpringCGLIB$$0 наследует класс бина. Final-методы перехватить не выйдет.';
+    return { ...common, title: 'Прокси перехватило вызов', detail };
+  }
+  if (item.data.kind === 'tx-interceptor') {
+    return { ...common, title: 'Транзакция открыта', detail: 'TransactionInterceptor вызвал BEGIN до метода. Advice из @Transactional применён.' };
+  }
+  if (item.data.kind === 'target-method') {
+    return { ...common, title: 'Настоящий метод выполняется', detail: 'Код AccountServiceImpl.transfer() работает внутри открытой транзакции.' };
+  }
+  if (item.data.kind === 'self-call') {
+    return { ...common, status: 'skipped', title: 'this-вызов миновал прокси', detail: 'transfer() вызван напрямую из объекта. Перехватчик не участвует — внутренний вызов выполнился без своей транзакции.' };
+  }
+  if (item.data.kind === 'commit') {
+    if (options.failure) {
+      return { ...common, status: 'error', title: 'ROLLBACK', detail: 'Исключение покинуло @Transactional-метод. LoggingTransactionManager печатает ROLLBACK.' };
+    }
+    return { ...common, title: 'COMMIT', detail: options.internalCall
+      ? 'Внешняя транзакция зафиксирована, но внутренний this-вызов остался без своей.'
+      : 'Метод завершился без исключений. LoggingTransactionManager печатает COMMIT.' };
+  }
+  return fallbackStep(item);
+}
+
+function conditionStep(item, options) {
+  const common = { nodeId: item.id, status: 'success', edgeIds: [] };
+  if (item.data.kind === 'condition-evaluator') {
+    return { ...common, title: 'Оценка условий начата', detail: 'У каждого @Bean проверяются аннотации @Conditional. Решение принимается до создания объекта.' };
+  }
+  if (item.data.kind === 'condition-property') {
+    if (!options.property) {
+      return { ...common, status: 'skipped', title: 'Property не совпала', detail: 'feature.notifications.enabled ≠ true. Условие провалено — без ошибки, определение пропускается.' };
+    }
+    return { ...common, title: 'Property совпала', detail: 'feature.notifications.enabled = true. @ConditionalOnProperty выполнено.' };
+  }
+  if (item.data.kind === 'condition-class') {
+    if (!options.jackson) {
+      return { ...common, status: 'skipped', title: 'Класса нет в classpath', detail: 'ObjectMapper отсутствует. Условие провалено; класс бина даже не загружается в JVM.' };
+    }
+    return { ...common, title: 'Класс найден в classpath', detail: 'ObjectMapper доступен — @ConditionalOnClass выполнено.' };
+  }
+  if (item.data.kind === 'condition-bean') {
+    if (options.userBean) {
+      return { ...common, status: 'skipped', title: 'Уступает пользовательскому бину', detail: 'В контексте уже есть ваш FeatureService. @ConditionalOnMissingBean запрещает дубль.' };
+    }
+    return { ...common, title: 'Пользовательский бин не найден', detail: '@ConditionalOnMissingBean выполнено — автоконфигурация может создать бин.' };
+  }
+  if (item.data.kind === 'feature-service') {
+    const blocked = !options.property || !options.jackson || options.userBean;
+    if (blocked) {
+      const reason = options.userBean ? 'пользовательский @Bean имеет приоритет' : 'хотя бы одно условие провалено';
+      return { ...common, status: 'skipped', title: 'Бин не зарегистрирован', detail: `FeatureService пропущен: ${reason}. В отчёте это negativeMatches.` };
+    }
+    return { ...common, title: 'FeatureService зарегистрирован', detail: 'Все условия выполнены. BeanDefinition попала в контекст — объект появится при старте.' };
+  }
+  if (item.data.kind === 'report') {
+    const matched = [options.property, options.jackson, !options.userBean].filter(Boolean).length;
+    return { ...common, title: 'Отчёт сформирован', detail: `positiveMatches: ${matched} · negativeMatches: ${3 - matched}. В модуле 04 это /actuator/conditions и --debug.` };
+  }
+  return fallbackStep(item);
+}
+
+function buildBoot(ordered, edges, options) {
+  return { steps: toSteps(ordered, edges, bootStep, options), outcome: options.enabled ? 'success' : 'error' };
+}
+
+function buildRequest(ordered, edges, options) {
   const steps = [];
   for (const item of ordered) {
-    const step = mapper(item, options);
+    const step = requestStep(item, options);
     step.id = `${item.id}-${steps.length}`;
     step.edgeIds = edges.filter((link) => link.target === item.id).map((link) => link.id);
     steps.push(step);
-    if (sceneId === 'request' && item.data.kind === 'auth' && step.status === 'error') {
+    if (item.data.kind === 'auth' && step.status === 'error') {
       steps.push({ id: 'response-401', nodeId: 'client', edgeIds: edges.map((link) => link.id), phase: 'response', status: 'error',
         title: '401 · запрос остановлен', detail: 'Controller не вызывался. ExceptionTranslationFilter сформировал ответ с X-Visual-SB.' });
       return { steps, outcome: 'unauthorized' };
     }
   }
-  if (sceneId === 'boot' || sceneId !== 'request') return { steps, outcome: options.enabled ? 'success' : 'error' };
-
   const failed = options.failure;
   if (failed) {
     const transaction = ordered.find((item) => item.data.kind === 'transaction');
@@ -145,6 +256,36 @@ export function createSimulation(sceneId, rawNodes, rawEdges, options) {
     title: failed ? '500 · изменения отменены' : '200 OK · application/json',
     detail: failed ? 'Исключение прошло через MVC; в учебной модели возвращается ошибка. Данные не сохранены.' : 'HttpMessageConverter превратил объект в JSON. Фильтры завершают работу в обратном порядке.' });
   return { steps, outcome: failed ? 'rollback' : 'success' };
+}
+
+function buildLifecycle(ordered, edges, options) {
+  return { steps: toSteps(ordered, edges, lifecycleStep, options), outcome: options.initFailure ? 'error' : 'success' };
+}
+
+function buildProxies(ordered, edges, options) {
+  return { steps: toSteps(ordered, edges, proxyStep, options), outcome: options.failure ? 'rollback' : 'success' };
+}
+
+function buildConditions(ordered, edges, options) {
+  return { steps: toSteps(ordered, edges, conditionStep, options), outcome: 'success' };
+}
+
+const BUILDERS = {
+  boot: buildBoot,
+  request: buildRequest,
+  lifecycle: buildLifecycle,
+  proxies: buildProxies,
+  conditions: buildConditions,
+};
+
+export function createSimulation(sceneId, rawNodes, rawEdges, options) {
+  const scene = SCENES[sceneId];
+  const nodes = rawNodes.filter((item) => !item.hidden);
+  const ids = new Set(nodes.map((item) => item.id));
+  const edges = rawEdges.filter((item) => !item.hidden && ids.has(item.source) && ids.has(item.target));
+  const { ordered, error } = graphOrder(nodes, edges, scene.startKind, scene.targetKind);
+  if (error) return error;
+  return BUILDERS[sceneId](ordered, edges, options);
 }
 
 export function nodeStates(nodes, trace, cursor) {

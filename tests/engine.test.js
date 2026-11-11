@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGraph } from '../src/data/scenes.js';
+import { SCENES, applyOptions, createGraph } from '../src/data/scenes.js';
 import { createSimulation, nodeStates } from '../src/lib/simulation.js';
 
 function simulate(sceneId, options = {}) {
   const graph = createGraph(sceneId);
-  const defaults = sceneId === 'boot' ? { enabled: true, custom: false } : { endpoint: 'private', credentials: true, failure: false };
-  return createSimulation(sceneId, graph.nodes, graph.edges, { ...defaults, ...options });
+  const merged = { ...SCENES[sceneId].defaults, ...options };
+  const applied = applyOptions(sceneId, merged, graph.nodes, graph.edges);
+  return createSimulation(sceneId, applied.nodes, applied.edges, merged);
 }
 
 test('Boot создаёт GreeterService при выполненных условиях', () => {
@@ -25,10 +26,7 @@ test('Boot отключает starter и показывает ошибку ре�
 });
 
 test('Пользовательский бин заставляет автоконфигурацию отступить', () => {
-  const graph = createGraph('boot');
-  const nodes = graph.nodes.map((node) => node.id === 'custom' ? { ...node, hidden: false } : node);
-  const edges = graph.edges.map((edge) => edge.id === 'custom-bpp' ? { ...edge, hidden: false } : edge);
-  const result = createSimulation('boot', nodes, edges, { enabled: true, custom: true });
+  const result = simulate('boot', { custom: true });
   assert.equal(result.outcome, 'success');
   assert.equal(result.steps.find((step) => step.nodeId === 'auto').status, 'skipped');
   assert.equal(result.steps.find((step) => step.nodeId === 'greeter').status, 'skipped');
@@ -62,6 +60,76 @@ test('Исключение отменяет INSERT', () => {
   assert.equal(result.steps.at(-1).title, '500 · изменения отменены');
 });
 
+test('Lifecycle: бин проходит конвейер и становится готовым', () => {
+  const result = simulate('lifecycle');
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.steps.at(-1).title, 'Бин готов');
+  assert.equal(result.steps.find((step) => step.nodeId === 'init').status, 'success');
+});
+
+test('Lifecycle: ошибка в init-методе роняет контекст', () => {
+  const result = simulate('lifecycle', { initFailure: true });
+  assert.equal(result.outcome, 'error');
+  assert.equal(result.steps.find((step) => step.nodeId === 'init').status, 'error');
+  assert.equal(result.steps.at(-1).title, 'Контекст не поднялся');
+});
+
+test('Lifecycle: BPP оборачивает бин в прокси', () => {
+  const result = simulate('lifecycle', { proxyWrap: true });
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.steps.find((step) => step.nodeId === 'bpp').title, 'Бин обёрнут в прокси');
+  assert.match(result.steps.at(-1).detail, /прокси/);
+});
+
+test('Proxies: CGLIB-вызов завершается COMMIT', () => {
+  const result = simulate('proxies');
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.steps.at(-1).title, 'COMMIT');
+  assert.match(result.steps.find((step) => step.nodeId === 'proxy').detail, /CGLIB/);
+});
+
+test('Proxies: JDK-прокси объясняет требование интерфейса', () => {
+  const result = simulate('proxies', { proxyType: 'jdk' });
+  assert.equal(result.outcome, 'success');
+  assert.match(result.steps.find((step) => step.nodeId === 'proxy').detail, /JDK/);
+});
+
+test('Proxies: самовызов this минует прокси', () => {
+  const result = simulate('proxies', { internalCall: true });
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.steps.find((step) => step.nodeId === 'selfcall').status, 'skipped');
+  assert.match(result.steps.find((step) => step.nodeId === 'selfcall').title, /миновал прокси/);
+});
+
+test('Proxies: исключение в методе даёт ROLLBACK', () => {
+  const result = simulate('proxies', { failure: true });
+  assert.equal(result.outcome, 'rollback');
+  assert.equal(result.steps.at(-1).status, 'error');
+  assert.equal(result.steps.at(-1).title, 'ROLLBACK');
+});
+
+test('Conditions: все условия выполнены — бин зарегистрирован', () => {
+  const result = simulate('conditions');
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.steps.find((step) => step.nodeId === 'feature').status, 'success');
+  assert.match(result.steps.at(-1).detail, /positiveMatches: 3/);
+});
+
+test('Conditions: провал условия прячет бин, отчёт считает отказы', () => {
+  const result = simulate('conditions', { property: false });
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.steps.find((step) => step.nodeId === 'onproperty').status, 'skipped');
+  assert.equal(result.steps.find((step) => step.nodeId === 'feature').status, 'skipped');
+  assert.match(result.steps.at(-1).detail, /positiveMatches: 2 · negativeMatches: 1/);
+});
+
+test('Conditions: пользовательский бин отключает автоконфигурацию без ошибки', () => {
+  const result = simulate('conditions', { userBean: true });
+  assert.equal(result.steps.find((step) => step.nodeId === 'onbean').status, 'skipped');
+  assert.equal(result.steps.find((step) => step.nodeId === 'feature').status, 'skipped');
+  assert.equal(result.steps.at(-1).status, 'success');
+});
+
 test('Добавленный и соединённый компонент входит в трассировку', () => {
   const graph = createGraph('boot');
   graph.nodes.push({ id: 'extra', data: { kind: 'component', label: 'AuditService' } });
@@ -73,16 +141,16 @@ test('Добавленный и соединённый компонент вхо
 });
 
 test('Удаление стартового узла объясняет нерабочий маршрут', () => {
-  const graph = createGraph('boot');
-  const result = createSimulation('boot', graph.nodes.filter((node) => node.id !== 'application'), graph.edges, { enabled: true, custom: false });
+  const graph = createGraph('lifecycle');
+  const result = createSimulation('lifecycle', graph.nodes.filter((node) => node.id !== 'definition'), graph.edges, { initFailure: false, proxyWrap: false });
   assert.equal(result.outcome, 'error');
   assert.equal(result.steps[0].title, 'Маршрут не собран');
 });
 
 test('Цикл не отправляет проигрыватель в бесконечный цикл', () => {
-  const graph = createGraph('boot');
-  graph.edges.push({ id: 'cycle', source: 'ready', target: 'application' });
-  const result = createSimulation('boot', graph.nodes, graph.edges, { enabled: true, custom: false });
+  const graph = createGraph('conditions');
+  graph.edges.push({ id: 'cycle', source: 'report', target: 'evaluator' });
+  const result = createSimulation('conditions', graph.nodes, graph.edges, { property: true, jackson: true, userBean: false });
   assert.equal(result.steps[0].title, 'Обнаружен цикл');
 });
 

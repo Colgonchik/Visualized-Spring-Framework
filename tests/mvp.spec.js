@@ -86,6 +86,50 @@ test('Песочница: добавить, переименовать, соед
   await expect(page.locator('.react-flow__node')).toHaveCount(8);
 });
 
+test('Lifecycle: init-этап ломает контекст как в реальном модуле', async ({ page }) => {
+  await page.goto('/#lifecycle');
+  await expect(page.getByRole('heading', { name: 'Жизненный цикл бина.' })).toBeVisible();
+  await expect(page.locator('.react-flow__node')).toHaveCount(6);
+  await page.getByRole('switch', { name: 'Ошибка в init-методе' }).click();
+  for (let index = 0; index < 6; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry.is-current')).toContainText('Контекст не поднялся');
+  await expect(page.locator('.flow-node.is-error').filter({ hasText: 'Бин готов' })).toBeVisible();
+  await page.getByRole('switch', { name: 'Ошибка в init-методе' }).click();
+  await page.getByRole('switch', { name: 'Обёртка в прокси' }).click();
+  for (let index = 0; index < 6; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry.is-current')).toContainText('Бин готов');
+  await expect(page.locator('.log-entry').filter({ hasText: 'Бин обёрнут в прокси' })).toBeVisible();
+});
+
+test('Proxies: самовызов this показывает узел, который минует прокси', async ({ page }) => {
+  await page.goto('/#proxies');
+  await expect(page.getByRole('heading', { name: 'AOP-прокси и @Transactional.' })).toBeVisible();
+  await expect(page.locator('.react-flow__node')).toHaveCount(5);
+  await page.getByRole('switch', { name: 'Самовызов this.transfer()' }).click();
+  await expect(page.locator('.react-flow__node')).toHaveCount(6);
+  for (let index = 0; index < 6; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry').filter({ hasText: 'this-вызов миновал прокси' })).toBeVisible();
+  await expect(page.locator('.flow-node.is-skipped').filter({ hasText: 'this.transfer()' })).toBeVisible();
+  await page.getByRole('switch', { name: 'Самовызов this.transfer()' }).click();
+  await page.getByRole('switch', { name: 'Исключение в методе' }).click();
+  for (let index = 0; index < 5; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry.is-current')).toContainText('ROLLBACK');
+  await expect(page.locator('.scene-badge')).toContainText('SpringCGLIB');
+});
+
+test('Conditions: провал property прячет бин, отчёт считает negative matches', async ({ page }) => {
+  await page.goto('/#conditions');
+  await expect(page.getByRole('heading', { name: 'Условия создания бинов.' })).toBeVisible();
+  await expect(page.locator('.react-flow__node')).toHaveCount(6);
+  await page.getByRole('switch', { name: 'Property включена' }).click();
+  for (let index = 0; index < 6; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry').filter({ hasText: 'Бин не зарегистрирован' })).toBeVisible();
+  await expect(page.locator('.log-entry.is-current')).toContainText('positiveMatches: 2 · negativeMatches: 1');
+  await page.getByRole('switch', { name: 'Свой FeatureService' }).click();
+  for (let index = 0; index < 6; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry').filter({ hasText: 'Уступает пользовательскому бину' })).toBeVisible();
+});
+
 test('Мобильная раскладка и справка доступны', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#request');
