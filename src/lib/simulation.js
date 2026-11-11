@@ -270,12 +270,201 @@ function buildConditions(ordered, edges, options) {
   return { steps: toSteps(ordered, edges, conditionStep, options), outcome: 'success' };
 }
 
+function scanStep(item, options) {
+  const common = { nodeId: item.id, status: 'success', edgeIds: [] };
+  if (item.data.kind === 'application') {
+    return { ...common, title: 'Сканирование запущено', detail: '@ComponentScan читает basePackages и индекс classpath.' };
+  }
+  if (item.data.kind === 'scan') {
+    return { ...common, title: 'Базовый пакет обойден', detail: 'Найдены классы со стереотипами @Component, @Service, @Repository.' };
+  }
+  if (item.id === 'plain') {
+    return { ...common, title: 'Кандидат принят', detail: 'Имя бина сгенерируется из класса: plainComponent.' };
+  }
+  if (item.id === 'named') {
+    return { ...common, title: 'Кандидат принят', detail: 'Явное имя из аннотации: renamedComponent.' };
+  }
+  if (item.id === 'internal') {
+    if (!options.excluded) {
+      return { ...common, title: 'InternalComponent принят', detail: 'Фильтр выключен — внутренний компонент попадёт в контекст.' };
+    }
+    return { ...common, status: 'skipped', title: 'InternalComponent отброшен', detail: 'Регекс excluded\\..* сработал до регистрации метаданных.' };
+  }
+  if (item.id === 'filter') {
+    return { ...common, title: options.excluded ? 'Фильтр применён' : 'Фильтр отключён',
+      detail: options.excluded ? 'Кандидаты из excluded.* отсеяны до создания BeanDefinition.' : 'Ничего не отбраковывается: сканируется всё подряд.' };
+  }
+  if (item.data.kind === 'ready') {
+    const internalFate = options.internal && options.excluded ? ' internalComponent исключён фильтром.' : '';
+    return { ...common, title: 'BeanDefinition зарегистрированы', detail: `plainComponent и renamedComponent стали метаданными.${internalFate}` };
+  }
+  return fallbackStep(item);
+}
+
+function definitionStep(item, options) {
+  const common = { nodeId: item.id, status: 'success', edgeIds: [] };
+  if (item.data.kind === 'auto-configuration') {
+    return { ...common, title: 'Описания собраны', detail: '@Bean-методы AppConfig превращены в метаданные — объектов нет.' };
+  }
+  if (item.data.kind === 'metadata-reader') {
+    return { ...common, title: 'Реестр открыт', detail: 'BeanDefinitionRegistryPostProcessor может править определения до создания бинов.' };
+  }
+  if (item.id === 'greeterDef') {
+    return { ...common, title: '«greeter» зарегистрирован программно', detail: 'new RootBeanDefinition(Greeter.class) — только метаданные, экземпляра нет.' };
+  }
+  if (item.id === 'lazyDef') {
+    return { ...common, title: 'lazyInit = true', detail: 'expensiveService не будет создан при старте контекста.' };
+  }
+  if (item.data.kind === 'definition-registry') {
+    const parts = [];
+    if (options.programmatic) parts.push('greeter (программно)');
+    parts.push('timeProvider (@Bean)');
+    if (options.lazy) parts.push('expensiveService помечен lazy');
+    return { ...common, title: 'Реестр метаданных заполнен', detail: `${parts.join(', ')}. containsSingleton() == false — живых объектов нет.` };
+  }
+  if (item.data.kind === 'instantiation-point') {
+    if (options.lazy) {
+      return { ...common, title: 'Создание отложено до getBean', detail: 'В модуле 02 containsSingleton("expensiveService") == false до первого запроса.' };
+    }
+    return { ...common, title: 'Экземпляр создан при старте', detail: 'Singleton прошёл конвейер создания ещё до завершения run().' };
+  }
+  return fallbackStep(item);
+}
+
+function postprocessorStep(item, options) {
+  const common = { nodeId: item.id, status: 'success', edgeIds: [] };
+  const proxied = options.logged && options.iface;
+  if (item.data.kind === 'service') {
+    return { ...common, title: 'Бин создан', detail: 'GreetingServiceImpl прошёл populate и готов к обработке постпроцессорами.' };
+  }
+  if (item.id === 'before') {
+    return { ...common, title: 'Before-обработка', detail: 'Каждый BPP получил бин до init-методов.' };
+  }
+  if (item.data.kind === 'init') {
+    return { ...common, title: 'Init-этапы выполнены', detail: '@PostConstruct и afterPropertiesSet отработали между before и after.' };
+  }
+  if (item.id === 'after') {
+    if (!options.logged) {
+      return { ...common, status: 'skipped', title: 'Нет @Logged', detail: 'LoggingPostProcessor вернул бин без изменений — аннотации-маркера нет.' };
+    }
+    if (!options.iface) {
+      return { ...common, status: 'skipped', title: 'Нет интерфейса', detail: 'JDK-прокси невозможен — бин без интерфейса, возвращён исходный объект.' };
+    }
+    return { ...common, title: 'Бин заменён на прокси', detail: 'Proxy.newProxyInstance вернул обёртку с LoggingInvocationHandler.' };
+  }
+  if (item.data.kind === 'proxy') {
+    return { ...common, title: 'В контексте — прокси', detail: 'Все вызовы greet() пойдут через handler с замером времени.' };
+  }
+  if (item.data.kind === 'caller') {
+    if (proxied) {
+      return { ...common, title: 'Вызов перехвачен', detail: 'LoggingInvocationHandler залогировал вызов и делегировал в GreetingServiceImpl.' };
+    }
+    return { ...common, title: 'Прямой вызов', detail: 'Обёртки нет — вызов попал сразу в реализацию без логирования.' };
+  }
+  return fallbackStep(item);
+}
+
+function autoconfigStep(item, options) {
+  const common = { nodeId: item.id, status: 'success', edgeIds: [] };
+  if (item.data.kind === 'application') {
+    return { ...common, title: 'Автоконфигурация запущена', detail: '@EnableAutoConfiguration передал управление import-селектору.' };
+  }
+  if (item.data.kind === 'imports') {
+    return { ...common, title: 'Список кандидатов прочитан', detail: 'Все *.imports из JAR на classpath собраны в единый список кандидатов.' };
+  }
+  if (item.id === 'candidates') {
+    return { ...common, title: 'Кандидаты собраны', detail: 'Сотни автоконфигураций ждут фильтрации по условиям.' };
+  }
+  if (item.id === 'classFilter') {
+    if (options.jackson) {
+      return { ...common, title: 'Jackson найден', detail: 'JacksonAutoConfiguration проходит @ConditionalOnClass.' };
+    }
+    return { ...common, status: 'skipped', title: 'Jackson нет в classpath', detail: 'Конфигурация отсеяна на фильтре — так исчезают web-, kafka-, webflux-автоконфигурации без своих стартеров.' };
+  }
+  if (item.id === 'selected') {
+    if (!options.jackson) {
+      return { ...common, status: 'skipped', title: 'Не прошла фильтр', detail: 'Без Jackson эта конфигурация не регистрируется.' };
+    }
+    if (options.userBean) {
+      return { ...common, status: 'skipped', title: 'Отступила перед вашим бином', detail: 'ObjectMapper уже определён в AppConfig — @ConditionalOnMissingBean сработал.' };
+    }
+    return { ...common, title: 'Конфигурация принята', detail: 'JacksonAutoConfiguration добавит ObjectMapper в контекст.' };
+  }
+  if (item.id === 'userOverride') {
+    return { ...common, title: 'Ваш @Bean зарегистрирован', detail: 'AppConfig#objectMapper имеет приоритет над автоконфигурацией.' };
+  }
+  if (item.data.kind === 'ready') {
+    if (options.userBean) {
+      return { ...common, title: 'Контекст собран', detail: 'ObjectMapper в контексте — ваш, из AppConfig.' };
+    }
+    if (!options.jackson) {
+      return { ...common, title: 'Контекст собран без ObjectMapper', detail: 'Ни авто, ни ваш — бина нет. Вызовы getBean(ObjectMapper) упадут.' };
+    }
+    return { ...common, title: 'Контекст собран', detail: 'Ваши бины + JacksonAutoConfiguration. AutoconfigReportRunner печатает состав.' };
+  }
+  return fallbackStep(item);
+}
+
+function reportStep(item, options) {
+  const common = { nodeId: item.id, status: 'success', edgeIds: [] };
+  if (item.data.kind === 'application') {
+    if (!options.debug) {
+      return { ...common, status: 'skipped', title: 'Отчёт отключён', detail: 'Без --debug решения условий не печатаются. Данные всё ещё доступны через Actuator.' };
+    }
+    return { ...common, title: 'Отладка включена', detail: '--debug: Boot напечатает CONDITIONS EVALUATION REPORT в консоль.' };
+  }
+  if (item.data.kind === 'condition-evaluator') {
+    return { ...common, title: 'Решения собраны', detail: 'Каждый @Conditional оставил запись: конфигурация и исход оценки.' };
+  }
+  if (item.data.kind === 'positive-matches') {
+    if (options.detailed) {
+      return { ...common, title: 'positiveMatches: оба бина', detail: 'visual.report.detailed=true — reportService и detailedReportService созданы.' };
+    }
+    return { ...common, title: 'positiveMatches: reportService', detail: 'Обычный отчёт создан. detailedReportService сюда не попал.' };
+  }
+  if (item.data.kind === 'negative-matches') {
+    if (options.detailed) {
+      return { ...common, title: 'negativeMatches пуст', detail: 'Все условия модуля 04 выполнены — отказы закончились.' };
+    }
+    return { ...common, title: 'negativeMatches: detailedReportService', detail: '@ConditionalOnProperty(visual.report.detailed) не совпала — так задумано, ошибки нет.' };
+  }
+  if (item.data.kind === 'actuator-endpoint') {
+    return { ...common, title: 'Actuator отвечает', detail: 'GET /actuator/conditions показывает те же группы; /actuator/beans — фактический список бинов.' };
+  }
+  return fallbackStep(item);
+}
+
+function buildScan(ordered, edges, options) {
+  return { steps: toSteps(ordered, edges, scanStep, options), outcome: 'success' };
+}
+
+function buildDefinition(ordered, edges, options) {
+  return { steps: toSteps(ordered, edges, definitionStep, options), outcome: 'success' };
+}
+
+function buildPostprocessor(ordered, edges, options) {
+  return { steps: toSteps(ordered, edges, postprocessorStep, options), outcome: 'success' };
+}
+
+function buildAutoconfig(ordered, edges, options) {
+  return { steps: toSteps(ordered, edges, autoconfigStep, options), outcome: 'success' };
+}
+
+function buildReport(ordered, edges, options) {
+  return { steps: toSteps(ordered, edges, reportStep, options), outcome: 'success' };
+}
+
 const BUILDERS = {
   boot: buildBoot,
   request: buildRequest,
   lifecycle: buildLifecycle,
   proxies: buildProxies,
   conditions: buildConditions,
+  scan: buildScan,
+  definition: buildDefinition,
+  postprocessor: buildPostprocessor,
+  autoconfig: buildAutoconfig,
+  report: buildReport,
 };
 
 export function createSimulation(sceneId, rawNodes, rawEdges, options) {

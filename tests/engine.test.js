@@ -166,6 +166,73 @@ test('Состояния узлов соответствуют текущему 
   assert.equal(states.get('ready'), 'idle');
 });
 
+test('Scan: фильтр отбрасывает InternalComponent до метаданных', () => {
+  const result = simulate('scan', { internal: true });
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.steps.find((step) => step.nodeId === 'internal').status, 'skipped');
+  assert.match(result.steps.find((step) => step.nodeId === 'registry').detail, /internalComponent исключён фильтром/);
+});
+
+test('Scan: без фильтра внутренний компонент регистрируется', () => {
+  const result = simulate('scan', { internal: true, excluded: false });
+  assert.equal(result.steps.find((step) => step.nodeId === 'internal').status, 'success');
+  assert.equal(result.steps.find((step) => step.nodeId === 'filter').title, 'Фильтр отключён');
+});
+
+test('Definition: метаданные без объектов, lazy откладывает создание', () => {
+  const result = simulate('definition', { lazy: true });
+  assert.equal(result.outcome, 'success');
+  assert.match(result.steps.find((step) => step.nodeId === 'registry').detail, /containsSingleton\(\) == false/);
+  assert.match(result.steps.find((step) => step.nodeId === 'lazyDef').title, /lazyInit/);
+  assert.equal(result.steps.find((step) => step.nodeId === 'instance').title, 'Создание отложено до getBean');
+});
+
+test('Definition: без программной регистрации greeter не появляется', () => {
+  const result = simulate('definition', { programmatic: false });
+  assert.equal(result.steps.some((step) => step.nodeId === 'greeterDef'), false);
+  assert.match(result.steps.find((step) => step.nodeId === 'registry').detail, /timeProvider/);
+});
+
+test('Postprocessor: прокси только при @Logged и интерфейсе одновременно', () => {
+  const proxied = simulate('postprocessor');
+  assert.equal(proxied.steps.find((step) => step.nodeId === 'after').title, 'Бин заменён на прокси');
+  assert.equal(proxied.steps.find((step) => step.nodeId === 'methodCall').title, 'Вызов перехвачен');
+  const noLog = simulate('postprocessor', { logged: false });
+  assert.equal(noLog.steps.find((step) => step.nodeId === 'after').status, 'skipped');
+  assert.match(noLog.steps.find((step) => step.nodeId === 'after').title, /@Logged/);
+  assert.equal(noLog.steps.find((step) => step.nodeId === 'methodCall').title, 'Прямой вызов');
+  const noIface = simulate('postprocessor', { iface: false });
+  assert.match(noIface.steps.find((step) => step.nodeId === 'after').detail, /интерфейс/);
+});
+
+test('Autoconfig: без Jackson конфигурация отсеяна на фильтре', () => {
+  const result = simulate('autoconfig', { jackson: false });
+  assert.equal(result.steps.find((step) => step.nodeId === 'classFilter').status, 'skipped');
+  assert.equal(result.steps.find((step) => step.nodeId === 'selected').status, 'skipped');
+  assert.match(result.steps.find((step) => step.nodeId === 'contextReady').title, /без ObjectMapper/);
+});
+
+test('Autoconfig: пользовательский @Bean заставляет авто-конфигурацию отступить', () => {
+  const result = simulate('autoconfig', { userBean: true });
+  assert.equal(result.steps.find((step) => step.nodeId === 'selected').status, 'skipped');
+  assert.match(result.steps.find((step) => step.nodeId === 'selected').detail, /@ConditionalOnMissingBean/);
+  assert.equal(result.steps.find((step) => step.nodeId === 'userOverride').status, 'success');
+});
+
+test('Report: detailed переносит бин из negativeMatches в positiveMatches', () => {
+  const base = simulate('report');
+  assert.match(base.steps.find((step) => step.nodeId === 'negative').title, /detailedReportService/);
+  const detailed = simulate('report', { detailed: true });
+  assert.match(detailed.steps.find((step) => step.nodeId === 'positive').title, /оба бина/);
+  assert.equal(detailed.steps.find((step) => step.nodeId === 'negative').title, 'negativeMatches пуст');
+});
+
+test('Report: без --debug консольный отчёт отключён', () => {
+  const result = simulate('report', { debug: false });
+  assert.equal(result.steps.find((step) => step.nodeId === 'appStart').status, 'skipped');
+  assert.equal(result.steps.at(-1).status, 'success');
+});
+
 test('У каждого узла сцен есть сниппет кода из Java-модуля', () => {
   for (const [sceneId, scene] of Object.entries(SCENES)) {
     for (const node of scene.nodes) {

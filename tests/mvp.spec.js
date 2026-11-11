@@ -176,6 +176,20 @@ test('Песочница помнит изменённый граф после �
   await expect(page.locator('.react-flow__node')).toHaveCount(8);
 });
 
+test('Scan: фильтр исключает внутренний компонент до регистрации', async ({ page }) => {
+  await page.goto('/#scan');
+  await expect(page.getByRole('heading', { name: 'Поиск компонентов.' })).toBeVisible();
+  await expect(page.locator('.react-flow__node')).toHaveCount(6);
+  await page.getByRole('switch', { name: 'InternalComponent в excluded' }).click();
+  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  for (let index = 0; index < 7; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry.is-current')).toContainText('BeanDefinition зарегистрированы');
+  await expect(page.locator('.log-entry').filter({ hasText: 'InternalComponent отброшен' })).toBeVisible();
+  await page.getByRole('switch', { name: 'Регекс-фильтр excluded.*' }).click();
+  for (let index = 0; index < 7; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry').filter({ hasText: 'InternalComponent принят' })).toBeVisible();
+});
+
 test('Мобильная раскладка и справка доступны', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#request');

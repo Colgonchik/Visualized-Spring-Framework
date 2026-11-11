@@ -449,6 +449,358 @@ protected void doRollback(DefaultTransactionStatus status) {
     }`,
     },
   },
+
+  scan: {
+    application: {
+      file: '01-core/01-component-scan/.../ComponentScanApplication.java',
+      lang: 'java',
+      code: `@SpringBootApplication
+@ComponentScan(excludeFilters = @ComponentScan.Filter(
+        type = FilterType.REGEX,
+        pattern = "com\\\\.visualsb\\\\.componentscan\\\\.excluded\\\\..*"))
+public class ComponentScanApplication {`,
+    },
+    base: {
+      file: '01-core/01-component-scan/.../ScanReportRunner.java',
+      lang: 'java',
+      code: `private static final String BASE_PACKAGE =
+        "com.visualsb.componentscan";
+
+// печатает бины, найденные сканированием:
+Arrays.stream(context.getBeanDefinitionNames())
+        .filter(name -> isUserBean(
+            registry.getBeanDefinition(name)))
+        .sorted()
+        .forEach(name -> System.out.println(name));`,
+    },
+    plain: {
+      file: '01-core/01-component-scan/.../PlainComponent.java',
+      lang: 'java',
+      code: `@Component
+public class PlainComponent {
+}
+// имя бина сгенерируется из имени класса: plainComponent`,
+    },
+    named: {
+      file: '01-core/01-component-scan/.../NamedComponent.java',
+      lang: 'java',
+      code: `@Component("renamedComponent")
+public class NamedComponent {
+}
+// явное имя бина — оно и попадёт в контекст`,
+    },
+    internal: {
+      file: '01-core/01-component-scan/.../excluded/InternalComponent.java',
+      lang: 'java',
+      code: `package com.visualsb.componentscan.excluded;
+
+@Component
+public class InternalComponent {
+}
+// этот пакет закрыт регекс-фильтром
+// excluded\\\\..* — бина не будет`,
+    },
+    filter: {
+      file: '01-core/01-component-scan/.../ComponentScanApplication.java',
+      lang: 'java',
+      code: `@ComponentScan(excludeFilters = @ComponentScan.Filter(
+        type = FilterType.REGEX,
+        pattern = "com\\\\.visualsb\\\\.componentscan\\\\.excluded\\\\..*"))
+// фильтр срабатывает до регистрации BeanDefinition`,
+    },
+    registry: {
+      file: '01-core/01-component-scan/.../ScanReportRunner.java',
+      lang: 'java',
+      code: `System.out.println("Бин 'internalComponent' в контексте: "
+        + (context.containsBean("internalComponent")
+            ? "есть"
+            : "ОТСУТСТВУЕТ (исключён exclude-фильтром)"));`,
+    },
+  },
+
+  definition: {
+    config: {
+      file: '01-core/02-bean-definition/.../config/AppConfig.java',
+      lang: 'java',
+      code: `@Configuration
+public class AppConfig {
+
+    @Bean
+    public TimeProvider timeProvider() {
+        return new TimeProvider();
+    }
+}`,
+    },
+    reader: {
+      file: '01-core/02-bean-definition/.../DefinitionInspector.java',
+      lang: 'java',
+      code: `@Component
+public class DefinitionInspector
+        implements BeanDefinitionRegistryPostProcessor {
+
+    @Override
+    public void postProcessBeanDefinitionRegistry(
+            BeanDefinitionRegistry registry) {
+        BeanDefinition definition =
+                new RootBeanDefinition(Greeter.class);
+        registry.registerBeanDefinition("greeter", definition);
+    }`,
+    },
+    greeterDef: {
+      file: '01-core/02-bean-definition/.../DefinitionInspector.java',
+      lang: 'java',
+      code: `BeanDefinition definition = new RootBeanDefinition(Greeter.class);
+registry.registerBeanDefinition("greeter", definition);
+System.out.println(">>> [registry] 'greeter' зарегистрирован программно. "
+        + "Экземпляра ещё нет — только метаданные.");`,
+    },
+    lazyDef: {
+      file: '01-core/02-bean-definition/.../DefinitionInspector.java',
+      lang: 'java',
+      code: `beanFactory.getBeanDefinition("expensiveService")
+        .setLazyInit(true);
+System.out.println(">>> [beanFactory] 'expensiveService': "
+        + "метаданные изменены -> lazyInit=true. "
+        + "Объект не будет создан при старте.");`,
+    },
+    registry: {
+      file: '01-core/02-bean-definition/.../DefinitionReportRunner.java',
+      lang: 'java',
+      code: `BeanDefinition bd = beanFactory.getBeanDefinition(name);
+System.out.printf("%-18s %-34s %-10s %s%n",
+        name, bd.getClass().getSimpleName(),
+        bd.getScope(), bd.isLazyInit());
+System.out.println("Экземпляр expensiveService создан при старте? "
+        + beanFactory.containsSingleton("expensiveService"));`,
+    },
+    instance: {
+      file: '01-core/02-bean-definition/.../service/ExpensiveService.java',
+      lang: 'java',
+      code: `@Component
+public class ExpensiveService {
+
+    public ExpensiveService() {
+        System.out.println(">>> ExpensiveService: конструктор вызван, "
+                + "экземпляр создан");
+    }
+
+    public String work() {
+        return "работа выполнена";
+    }
+}`,
+    },
+  },
+
+  postprocessor: {
+    target: {
+      file: '01-core/04-beanpostprocessor/.../GreetingServiceImpl.java',
+      lang: 'java',
+      code: `@Logged
+@Component
+public class GreetingServiceImpl
+        implements GreetingService {
+
+    @Override
+    public String greet(String name) {
+        return "Привет, " + name + "!";
+    }
+}`,
+    },
+    before: {
+      file: '01-core/04-beanpostprocessor/.../LoggingPostProcessor.java',
+      lang: 'java',
+      code: `@Component
+public class LoggingPostProcessor
+        implements BeanPostProcessor {
+    // Spring вызывает его для КАЖДОГО бина:
+    // postProcessBeforeInitialization -> init ->
+    // postProcessAfterInitialization
+}`,
+    },
+    init: {
+      file: '01-core/04-beanpostprocessor/.../Logged.java',
+      lang: 'java',
+      code: `@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface Logged {
+}
+// маркерная аннотация: сама ничего не делает,
+// её читает LoggingPostProcessor`,
+    },
+    after: {
+      file: '01-core/04-beanpostprocessor/.../LoggingPostProcessor.java',
+      lang: 'java',
+      code: `Class<?> beanClass = bean.getClass();
+if (!beanClass.isAnnotationPresent(Logged.class)
+        || beanClass.getInterfaces().length == 0) {
+    return bean;
+}
+return Proxy.newProxyInstance(
+        beanClass.getClassLoader(),
+        beanClass.getInterfaces(),
+        new LoggingInvocationHandler(bean));`,
+    },
+    proxyBean: {
+      file: '01-core/04-beanpostprocessor/.../LoggingInvocationHandler.java',
+      lang: 'java',
+      code: `public class LoggingInvocationHandler
+        implements InvocationHandler {
+
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) {
+        long start = System.nanoTime();
+        System.out.println(">>> [proxy] вызов " + method.getName() + "()");
+        Object result = method.invoke(target, args);
+        System.out.println(">>> [proxy] завершён за "
+                + (System.nanoTime() - start) / 1_000 + " мкс");
+        return result;
+    }
+}`,
+    },
+    methodCall: {
+      file: '01-core/04-beanpostprocessor/.../BppReportRunner.java',
+      lang: 'java',
+      code: `System.out.println("Класс бина greetingService в runtime: "
+        + greetingService.getClass().getName());
+System.out.println("Это JDK-прокси? "
+        + Proxy.isProxyClass(greetingService.getClass()));
+
+System.out.println("Ответ: " + greetingService.greet("мир"));`,
+    },
+  },
+
+  autoconfig: {
+    application: {
+      file: '02-boot/01-autoconfiguration/.../AutoconfigurationApplication.java',
+      lang: 'java',
+      code: `@SpringBootApplication
+public class AutoconfigurationApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(
+                AutoconfigurationApplication.class, args);
+    }
+}
+// одна аннотация = scan + EnableAutoConfiguration
+// + ConfigurationProperties`,
+    },
+    enableAuto: {
+      file: '02-boot/01-autoconfiguration/.../AppConfig.java',
+      lang: 'java',
+      code: `@Configuration
+public class AppConfig {
+
+    @Bean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper()
+                .enable(SerializationFeature.INDENT_OUTPUT);
+    }
+}
+// ваш @Bean имеет приоритет над авто-конфигурацией`,
+    },
+    candidates: {
+      file: '02-boot/03-starters/.../AutoConfiguration.imports',
+      lang: 'text',
+      code: `# так выглядит список кандидатов
+# в любом стартере Spring Boot:
+com.visualsb.starters.starter.GreeterAutoConfiguration
+# у настоящих стартеров — десятки строк`,
+    },
+    classFilter: {
+      file: '02-boot/02-conditional/.../FeatureConfig.java',
+      lang: 'java',
+      code: `    @Bean
+    @ConditionalOnClass(ObjectMapper.class)
+    public JacksonReportService jacksonReportService() {
+        return new JacksonReportService();
+    }
+// нет класса в classpath —
+// определение пропускается без ошибки`,
+    },
+    selected: {
+      file: '02-boot/03-starters/.../GreeterAutoConfiguration.java',
+      lang: 'java',
+      code: `@AutoConfiguration
+@ConditionalOnProperty(prefix = "visual.greeting",
+        name = "enabled", havingValue = "true",
+        matchIfMissing = true)
+public class GreeterAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean
+    public GreeterService greeterService(
+            GreeterProperties properties) {
+        return new GreeterService(properties);
+    }
+}`,
+    },
+    userOverride: {
+      file: '02-boot/01-autoconfiguration/.../AppConfig.java',
+      lang: 'java',
+      code: `    @Bean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper()
+                .enable(SerializationFeature.INDENT_OUTPUT);
+    }
+// так выглядит замена авто-конфигурации:
+// бин того же типа, объявленный вами`,
+    },
+    contextReady: {
+      file: '02-boot/01-autoconfiguration/.../AutoconfigReportRunner.java',
+      lang: 'java',
+      code: `System.out.println("Бины типа ObjectMapper: "
+        + Arrays.toString(context
+            .getBeanNamesForType(ObjectMapper.class)));
+System.out.println("jacksonObjectMapper (от автоконфигурации): "
+        + context.containsBean("jacksonObjectMapper"));
+System.out.println("Наш objectMapper с INDENT_OUTPUT? "
+        + objectMapper.isEnabled(SerializationFeature.INDENT_OUTPUT));`,
+    },
+  },
+
+  report: {
+    appStart: {
+      file: '02-boot/04-conditions-report · запуск',
+      lang: 'bash',
+      code: `$ mvn spring-boot:run -Dspring-boot.run.arguments=--debug
+
+================ CONDITIONS EVALUATION REPORT ================`,
+    },
+    evaluation: {
+      file: '02-boot/04-conditions-report/.../ReportConfiguration.java',
+      lang: 'java',
+      code: `@Configuration(proxyBeanMethods = false)
+class ReportConfiguration {
+
+    @Bean
+    ReportService reportService() {
+        return new ReportService("обычный отчёт");
+    }`,
+    },
+    positive: {
+      file: '02-boot/04-conditions-report · вывод --debug',
+      lang: 'text',
+      code: `positiveMatches:
+  ReportConfiguration#reportService
+      @ConditionalOnProperty ... matched`,
+    },
+    negative: {
+      file: '02-boot/04-conditions-report · вывод --debug',
+      lang: 'text',
+      code: `negativeMatches:
+  ReportConfiguration#detailedReportService
+      @ConditionalOnProperty ... did not match
+      (visual.report.detailed не задано)`,
+    },
+    actuators: {
+      file: '02-boot/04-conditions-report/.../ActuatorReportRunner.java',
+      lang: 'java',
+      code: `System.out.println("http://localhost:8080/actuator/conditions"
+        + " -> positiveMatches / negativeMatches");
+System.out.println("http://localhost:8080/actuator/beans"
+        + " -> фактические бины контекста");`,
+    },
+  },
 };
 
 export function getSnippet(sceneId, nodeId) {

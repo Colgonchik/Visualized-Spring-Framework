@@ -363,3 +363,21 @@ h1 { font-size: clamp(26px, 2.35vw, 38px); font-weight: 500; letter-spacing: -1.
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* --- переносы длинного текста: журнал и правая колонка --- */
+.log-message strong, .log-message small { overflow-wrap: anywhere; }
+.node-details > p { overflow-wrap: anywhere; }
+.code-snippet > .eyebrow { word-break: break-all; line-height: 1.7; }
+.breakpoint code, .source-path code { word-break: break-all; }
+.node-annotation { word-break: break-all; }
+
+/* --- узкие экраны: topline с переключателем видов --- */
+@media (max-width: 700px) {
+  .canvas-topline { flex-wrap: wrap; height: auto; padding: 8px 12px; row-gap: 8px; }
+  .canvas-title { flex-wrap: wrap; row-gap: 8px; width: 100%; }
+  .canvas-actions { margin-left: auto; }
+  .view-switch { margin-left: 0; }
+  .view-switch button { padding: 4px 8px; }
+  .scene-badge { display: none; }
+  .log-body { height: 150px; }
+}
