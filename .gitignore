@@ -18,5 +18,8 @@ target/
 .DS_Store
 Thumbs.db
 
-# сайт живёт в собственном локальном репозитории (site/.git)
-site/
+# веб-часть проекта (собирается в site/)
+node_modules/
+site/dist/
+site/test-results/
+site/playwright-report/
