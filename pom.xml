@@ -36,5 +36,8 @@
         <module>03-web/01-dispatcher-servlet</module>
         <module>04-data/01-jpa-transactions</module>
         <module>05-security/01-filter-chain</module>
+        <module>06-extras/01-lombok</module>
+        <module>06-extras/02-validation</module>
+        <module>06-extras/03-flyway</module>
     </modules>
 </project>
