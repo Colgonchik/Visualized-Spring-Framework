@@ -1,5 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
-
+/* Шрифты не грузим из CDN: офлайн-запуск и тесты не должны зависеть от сети.
+   Если DM Sans / IBM Plex Mono установлены в системе — применятся, иначе fallback. */
 :root {
   font-family: 'DM Sans', 'Segoe UI', sans-serif;
   color: #e6ede7;

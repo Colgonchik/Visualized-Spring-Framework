@@ -801,6 +801,245 @@ System.out.println("http://localhost:8080/actuator/beans"
         + " -> фактические бины контекста");`,
     },
   },
+
+  lombok: {
+    source: {
+      file: '06-extras/01-lombok/.../UserAccount.java',
+      lang: 'java',
+      code: `@Data
+@Builder
+@AllArgsConstructor
+public class UserAccount {
+
+    private Long id;
+    private String username;
+    private String email;
+    private int age;
+}
+// весь класс — 15 строк`,
+    },
+    apt: {
+      file: '06-extras/01-lombok/pom.xml',
+      lang: 'xml',
+      code: `<dependency>
+    <groupId>org.projectlombok</groupId>
+    <artifactId>lombok</artifactId>
+    <optional>true</optional>
+</dependency>
+<!-- версия управляется BOM Spring Boot;
+     в runtime зависимость не попадает -->`,
+    },
+    ast: {
+      file: '06-extras/01-lombok/.../plain/UserAccountPlain.java',
+      lang: 'java',
+      code: `public static Builder builder() {
+    return new Builder();
+}
+// такой же builder() Lombok достраивает
+// в AST UserAccount — вместе с getters,
+// equals, hashCode и toString`,
+    },
+    plain: {
+      file: '06-extras/01-lombok/.../plain/UserAccountPlain.java',
+      lang: 'java',
+      code: `public String getUsername() {
+    return username;
+}
+
+public void setUsername(String username) {
+    this.username = username;
+}
+// …и так для каждого поля:
+// ~130 строк против 15 у Lombok-версии`,
+    },
+    bytecode: {
+      file: '06-extras/01-lombok · javap -p UserAccount.class',
+      lang: 'bash',
+      code: `$ javap -p target/classes/.../UserAccount.class
+  public static ...$UserAccountBuilder builder();
+  public java.lang.String getUsername();
+  public void setUsername(java.lang.String);
+  public boolean equals(java.lang.Object);
+  public int hashCode();
+  public java.lang.String toString();
+// следов Lombok в байткоде нет`,
+    },
+    usage: {
+      file: '06-extras/01-lombok/.../UserService.java',
+      lang: 'java',
+      code: `@Slf4j
+@Service
+@RequiredArgsConstructor
+public class UserService {
+
+    private final UserAccountProperties properties;
+
+    public UserAccount defaultAccount() {
+        return UserAccount.builder()
+                .username(properties.getUsername())
+                .build();
+    }
+}`,
+    },
+  },
+
+  validation: {
+    dto: {
+      file: '06-extras/02-validation/.../RegistrationRequest.java',
+      lang: 'java',
+      code: `public record RegistrationRequest(
+
+        @NotBlank(message = "имя пользователя обязательно")
+        @Size(min = 3, max = 20,
+                message = "имя пользователя: от {min} до {max}")
+        String username,
+
+        @NotBlank(message = "email обязателен")
+        @Email(message = "некорректный email: '\${validatedValue}'")
+        String email,`,
+    },
+    validator: {
+      file: '06-extras/02-validation/.../ValidationReportRunner.java',
+      lang: 'java',
+      code: `private final Validator validator;
+
+public ValidationReportRunner(Validator validator) {
+    this.validator = validator;
+}
+// бин из ValidationAutoConfiguration —
+// LocalValidatorFactoryBean внедряется напрямую`,
+    },
+    builtin: {
+      file: '06-extras/02-validation/.../RegistrationRequest.java',
+      lang: 'java',
+      code: `@Min(value = 18, message = "регистрация с {value} лет")
+@Max(value = 150, message = "возраст не может превышать {value}")
+int age,
+
+@NotNull(message = "адрес обязателен")
+@Valid
+Address address`,
+    },
+    custom: {
+      file: '06-extras/02-validation/.../StrongPasswordValidator.java',
+      lang: 'java',
+      code: `public class StrongPasswordValidator
+        implements ConstraintValidator<StrongPassword, String> {
+
+    @Override
+    public boolean isValid(String password,
+            ConstraintValidatorContext context) {
+        boolean longEnough = password.length() >= 8;
+        boolean hasDigit = password.chars().anyMatch(Character::isDigit);
+        boolean hasUpper = password.chars().anyMatch(Character::isUpperCase);
+        return longEnough && hasDigit && hasUpper;
+    }
+}`,
+    },
+    nested: {
+      file: '06-extras/02-validation/.../Address.java',
+      lang: 'java',
+      code: `public record Address(
+
+        @NotBlank(message = "город обязателен")
+        String city,
+
+        @Pattern(regexp = "\\\\d{6}",
+                message = "индекс: ровно 6 цифр")
+        String zipCode
+) {
+}
+// проверяется только благодаря @Valid на поле address`,
+    },
+    violations: {
+      file: '06-extras/02-validation/.../ValidationReportRunner.java',
+      lang: 'java',
+      code: `private void report(String label,
+        Set<ConstraintViolation<RegistrationRequest>> violations) {
+    System.out.println(label + ": " + violations.size() + " нарушений");
+    violations.stream()
+            .map(v -> "  " + v.getPropertyPath()
+                    + " -> " + v.getMessage())
+            .sorted()
+            .forEach(System.out::println);
+}`,
+    },
+    result: {
+      file: '06-extras/02-validation/.../ValidationApplicationTests.java',
+      lang: 'java',
+      code: `@Test
+void invalidRequestReportsEveryBrokenConstraint() {
+    Set<String> paths = validator.validate(request).stream()
+            .map(v -> v.getPropertyPath().toString())
+            .collect(Collectors.toSet());
+
+    assertThat(paths).containsExactlyInAnyOrder(
+            "username", "email", "password", "age",
+            "address.city", "address.zipCode");
+}`,
+    },
+  },
+
+  flyway: {
+    scripts: {
+      file: '06-extras/03-flyway/.../db/migration/V1__create_users.sql',
+      lang: 'sql',
+      code: `CREATE TABLE users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP
+);`,
+    },
+    v3: {
+      file: '06-extras/03-flyway/README.md · эксперимент 1',
+      lang: 'sql',
+      code: `-- V3__add_bio_to_users.sql
+ALTER TABLE users ADD COLUMN bio VARCHAR(200);
+-- изменение схемы — только новым файлом,
+-- V1 и V2 не редактируются никогда`,
+    },
+    engine: {
+      file: '06-extras/03-flyway/.../application.properties',
+      lang: 'properties',
+      code: `spring.application.name=flyway
+spring.datasource.url=jdbc:h2:mem:flywaydb;DB_CLOSE_DELAY=-1
+# flyway-core в classpath -> FlywayAutoConfiguration
+# создаёт бин Flyway и вызывает migrate()
+# до остальных бинов данных`,
+    },
+    history: {
+      file: '06-extras/03-flyway/.../FlywayReportRunner.java',
+      lang: 'java',
+      code: `MigrationInfo[] applied = flyway.info().applied();
+for (MigrationInfo info : applied) {
+    System.out.printf("  V%s | %s | checksum=%s | %s%n",
+            info.getVersion(), info.getDescription(),
+            info.getChecksum(), info.getState());
+}`,
+    },
+    schema: {
+      file: '06-extras/03-flyway/.../db/migration/V2__seed_users.sql',
+      lang: 'sql',
+      code: `INSERT INTO users (username, email) VALUES
+    ('neo', 'neo@matrix.io'),
+    ('trinity', 'trinity@matrix.io'),
+    ('morpheus', 'morpheus@matrix.io');`,
+    },
+    app: {
+      file: '06-extras/03-flyway/.../FlywayApplicationTests.java',
+      lang: 'java',
+      code: `@Test
+void checksumsAreRecordedAndValidationPasses() {
+    assertThat(flyway.validateWithResult()
+            .validationSuccessful).isTrue();
+    assertThat(flyway.info().applied())
+            .allSatisfy(info -> assertThat(
+                info.getChecksum()).isNotNull());
+}`,
+    },
+  },
 };
 
 export function getSnippet(sceneId, nodeId) {

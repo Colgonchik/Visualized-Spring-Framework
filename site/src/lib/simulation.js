@@ -454,6 +454,131 @@ function buildReport(ordered, edges, options) {
   return { steps: toSteps(ordered, edges, reportStep, options), outcome: 'success' };
 }
 
+function lombokStep(item, options) {
+  const common = { nodeId: item.id, status: 'success', edgeIds: [] };
+  if (item.data.kind === 'source-file') {
+    return { ...common, title: 'Исходник прочитан', detail: 'UserAccount.java: четыре поля и три аннотации. 15 строк — ни одного метода руками.' };
+  }
+  if (item.data.kind === 'apt') {
+    return { ...common, title: 'APT изменил дерево', detail: 'Lombok — annotation processor: он редактирует синтаксическое дерево javac, а не создаёт соседние .java-файлы.' };
+  }
+  if (item.data.kind === 'ast') {
+    return { ...common, title: 'Методы появились в AST', detail: options.builder
+      ? 'getters, setters, equals, hashCode, toString, all-args-конструктор и builder() — всё дописано в дерево.'
+      : 'getters, setters, equals, hashCode, toString и all-args-конструктор. Без @Builder метода builder() в дереве нет.' };
+  }
+  if (item.data.kind === 'plain-class') {
+    return { ...common, title: 'Рукописный двойник', detail: 'UserAccountPlain: ~130 строк делают то же самое. Тест модуля проверяет, что поведение совпадает.' };
+  }
+  if (item.data.kind === 'bytecode') {
+    return { ...common, title: '.class сгенерирован', detail: options.builder
+      ? 'javap -p покажет builder() и вложенный UserAccount$UserAccountBuilder.'
+      : 'javap -p покажет методы @Data. Класса UserAccount$UserAccountBuilder в байткоде нет.' };
+  }
+  if (item.data.kind === 'generated-use') {
+    if (!options.builder) {
+      return { ...common, status: 'error', title: 'Компиляция сломана', detail: 'UserAccount.builder() не существует без @Builder — LombokApplicationTests падает на этапе compile, а не в runtime.' };
+    }
+    return { ...common, title: 'builder() скомпилирован и работает', detail: 'UserService собирает аккаунт: UserAccount.builder()…build(). Три теста модуля зелёные.' };
+  }
+  return fallbackStep(item);
+}
+
+function validationStep(item, options) {
+  const common = { nodeId: item.id, status: 'success', edgeIds: [] };
+  if (item.data.kind === 'dto') {
+    return { ...common, title: 'DTO описывает свои инварианты', detail: 'Аннотации на компонентах record копируются компилятором на поля — движок читает их оттуда.' };
+  }
+  if (item.data.kind === 'validator') {
+    return { ...common, title: 'Validator готов', detail: 'LocalValidatorFactoryBean из ValidationAutoConfiguration — адаптер над Hibernate Validator, внедряется как обычный бин.' };
+  }
+  if (item.data.kind === 'constraint-builtin') {
+    if (!options.validData) {
+      return { ...common, status: 'error', title: 'Нарушения: username, email, age', detail: '«ne» короче 3 символов, «not-an-email» не email, 12 меньше 18.' };
+    }
+    return { ...common, title: 'Встроенные ограничения пройдены', detail: '@NotBlank, @Size, @Email, @Min/@Max — все шаблоны сообщений остались неиспользованными.' };
+  }
+  if (item.data.kind === 'constraint-custom') {
+    if (!options.validData) {
+      return { ...common, status: 'error', title: '@StrongPassword отклонил «weak»', detail: 'StrongPasswordValidator: минимум 8 символов, хотя бы одна цифра и заглавная буква.' };
+    }
+    return { ...common, title: 'Собственный валидатор пропустил пароль', detail: 'StrongPasswordValidator#isValid вернул true: длина, цифра и заглавная на месте.' };
+  }
+  if (item.data.kind === 'constraint-nested') {
+    if (!options.validData) {
+      return { ...common, status: 'error', title: 'address.city, address.zipCode', detail: 'Каскад @Valid добрался до вложенного объекта: пустой город и индекс из трёх цифр.' };
+    }
+    return { ...common, title: 'Address проверен каскадом', detail: '@Valid на поле address включил спуск во вложенный объект: город и индекс валидны.' };
+  }
+  if (item.data.kind === 'violations') {
+    if (!options.validData) {
+      const count = options.cascade ? 6 : 4;
+      return { ...common, status: 'error', title: `${count} нарушений собраны`, detail: 'Set<ConstraintViolation>: propertyPath вида address.city + интерполированное сообщение каждого ограничения.' };
+    }
+    return { ...common, title: '0 нарушений', detail: 'Множество ConstraintViolation пусто — данные соответствуют контракту.' };
+  }
+  if (item.data.kind === 'validation-result') {
+    if (!options.validData) {
+      return { ...common, status: 'error', title: 'Объект отклонён', detail: 'В веб-приложении тот же движок включается @Valid на аргументе контроллера — клиент получит 400 Bad Request.' };
+    }
+    return { ...common, title: 'Данные под контролем', detail: 'Запрос валиден — объект можно передавать в бизнес-логику. Проверяется тестом модуля 12.' };
+  }
+  return fallbackStep(item);
+}
+
+function flywayStep(item, options) {
+  const common = { nodeId: item.id, status: 'success', edgeIds: [] };
+  if (item.data.kind === 'migration-scripts') {
+    return { ...common, title: 'Скрипты найдены в classpath', detail: options.newMigration
+      ? 'classpath:db/migration — V1__create_users.sql, V2__seed_users.sql и новая V3__add_bio.sql.'
+      : 'classpath:db/migration — V1__create_users.sql и V2__seed_users.sql.' };
+  }
+  if (item.data.kind === 'migration-file') {
+    return { ...common, title: 'Новая миграция V3', detail: 'ALTER TABLE users ADD COLUMN bio — изменение схемы вперёд. Файлы V1 и V2 не тронуты.' };
+  }
+  if (item.data.kind === 'flyway-engine') {
+    if (options.modified) {
+      return { ...common, status: 'error', title: 'Validate failed', detail: 'Checksum файла V1 не сошёлся с записью в истории — скрипт изменили после применения. Flyway отказывается продолжать.' };
+    }
+    return { ...common, title: 'Diff с историей посчитан', detail: options.newMigration
+      ? 'V1 и V2 уже применены — выполнится только V3, в своей транзакции.'
+      : 'V1 и V2 новые — будут выполнены по возрастанию версий, каждая в транзакции.' };
+  }
+  if (item.data.kind === 'schema-history') {
+    if (options.modified) {
+      return { ...common, status: 'error', title: 'Запись не сошлась', detail: 'checksum в flyway_schema_history ≠ checksum файла V1. Так Flyway ловит правки задним числом.' };
+    }
+    return { ...common, title: `История: ${options.newMigration ? 3 : 2} записи`, detail: 'version, description, checksum, success — по строке на применённую миграцию.' };
+  }
+  if (item.data.kind === 'database') {
+    if (options.modified) {
+      return { ...common, status: 'skipped', title: 'Схема не тронута', detail: 'При провале validate миграции не применяются — база остаётся в прошлом состоянии.' };
+    }
+    return { ...common, title: 'Таблица users готова', detail: options.newMigration
+      ? 'CREATE TABLE из V1, INSERT из V2, ALTER TABLE из V3.'
+      : 'CREATE TABLE из V1 и INSERT трёх строк из V2.' };
+  }
+  if (item.data.kind === 'ready') {
+    if (options.modified) {
+      return { ...common, status: 'error', title: 'Контекст не поднялся', detail: 'FlywayMigrationInitializer бросил исключение — приложение падает на старте, а не работает с разъехавшейся схемой.' };
+    }
+    return { ...common, title: 'Приложение готово', detail: 'SELECT COUNT(*) = 3. Повторный старт ничего не применит — миграции идемпотентны по истории.' };
+  }
+  return fallbackStep(item);
+}
+
+function buildLombok(ordered, edges, options) {
+  return { steps: toSteps(ordered, edges, lombokStep, options), outcome: options.builder ? 'success' : 'error' };
+}
+
+function buildValidation(ordered, edges, options) {
+  return { steps: toSteps(ordered, edges, validationStep, options), outcome: options.validData ? 'success' : 'error' };
+}
+
+function buildFlyway(ordered, edges, options) {
+  return { steps: toSteps(ordered, edges, flywayStep, options), outcome: options.modified ? 'error' : 'success' };
+}
+
 const BUILDERS = {
   boot: buildBoot,
   request: buildRequest,
@@ -465,6 +590,9 @@ const BUILDERS = {
   postprocessor: buildPostprocessor,
   autoconfig: buildAutoconfig,
   report: buildReport,
+  lombok: buildLombok,
+  validation: buildValidation,
+  flyway: buildFlyway,
 };
 
 export function createSimulation(sceneId, rawNodes, rawEdges, options) {

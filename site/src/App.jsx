@@ -253,8 +253,8 @@ function App() {
           <span className="brand-mark"><Icon name="logo" size={27} /></span>
           <span><strong>VISUAL SB</strong><small>SPRING, БЕЗ МАГИИ</small></span>
         </a>
-        <div className="topbar-center"><span className="live-dot" />ИНТЕРАКТИВНАЯ ЛАБОРАТОРИЯ<span className="version">MVP 0.3</span></div>
-        <div className="topbar-right"><span className="proof">12 модулей <span>·</span> 43 теста</span><button className="text-button" onClick={() => setShowHelp(true)}><Icon name="info" size={16} />Как это работает</button></div>
+        <div className="topbar-center"><span className="live-dot" />ИНТЕРАКТИВНАЯ ЛАБОРАТОРИЯ<span className="version">MVP 0.4</span></div>
+        <div className="topbar-right"><span className="proof">15 модулей <span>·</span> 53 теста</span><button className="text-button" onClick={() => setShowHelp(true)}><Icon name="info" size={16} />Как это работает</button></div>
       </header>
 
       <div className="app-layout">

@@ -44,6 +44,11 @@ export function NodeGlyph({ kind, size = 18 }) {
     'metadata-reader': 'file', 'bean-metadata': 'box', 'definition-registry': 'database',
     'instantiation-point': 'cycle', 'positive-matches': 'check', 'negative-matches': 'warning',
     'actuator-endpoint': 'globe',
+    'source-file': 'code', apt: 'cpu', ast: 'layers', bytecode: 'file',
+    'plain-class': 'code', 'generated-use': 'check',
+    dto: 'code', validator: 'sliders', 'constraint-builtin': 'file', 'constraint-custom': 'code',
+    'constraint-nested': 'layers', violations: 'warning', 'validation-result': 'check',
+    'migration-scripts': 'file', 'migration-file': 'file', 'flyway-engine': 'cpu', 'schema-history': 'database',
   };
   return <Icon name={names[kind] || 'box'} size={size} />;
 }

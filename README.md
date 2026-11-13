@@ -42,6 +42,14 @@
 | [04-data/01-jpa-transactions](04-data/01-jpa-transactions/) | Proxy репозитория, commit и rollback | ✅ |
 | [05-security/01-filter-chain](05-security/01-filter-chain/) | Аутентификация и авторизация в цепочке фильтров | ✅ |
 
+### v3 — Extras: экосистема зависимостей
+
+| Модуль | Тема | Статус |
+|---|---|---|
+| [06-extras/01-lombok](06-extras/01-lombok/) | Код, которого нет в исходниках: APT, builder, getters | ✅ |
+| [06-extras/02-validation](06-extras/02-validation/) | Bean Validation: ограничения, каскад `@Valid`, свой валидатор | ✅ |
+| [06-extras/03-flyway](06-extras/03-flyway/) | Миграции схемы: версии, `flyway_schema_history`, checksum | ✅ |
+
 ## Требования
 
 - JDK 17+
@@ -69,7 +77,7 @@ mvn test
 
 ## Интерактивный сайт
 
-В `site/` находится визуальная лаборатория на React + Vite. Она не дублирует README, а превращает все 12 учебных модулей — от component scan до AOP-прокси и conditions report — в 10 интерактивных сцен: редактируемый граф, условия, журнал, UML-диаграмма последовательности и фрагменты реального Java-кода.
+В `site/` находится визуальная лаборатория на React + Vite. Она не дублирует README, а превращает все 15 учебных модулей — от component scan до AOP-прокси, conditions report и миграций Flyway — в 13 интерактивных сцен: редактируемый граф, условия, журнал, UML-диаграмма последовательности и фрагменты реального Java-кода.
 
 ```bash
 cd site

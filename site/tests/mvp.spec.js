@@ -155,6 +155,7 @@ test('Inspector: у узла показывается реальный код Ja
 
 test('Клавиатура: стрелки ходят по шагам трассировки', async ({ page }) => {
   await page.goto('/#lifecycle');
+  await expect(page.getByRole('heading', { name: 'Жизненный цикл бина.' })).toBeVisible();
   await page.keyboard.press('ArrowRight');
   await expect(page.locator('.log-entry.is-current')).toContainText('Чертёж найден');
   await page.keyboard.press('ArrowRight');
@@ -188,6 +189,54 @@ test('Scan: фильтр исключает внутренний компоне�
   await page.getByRole('switch', { name: 'Регекс-фильтр excluded.*' }).click();
   for (let index = 0; index < 7; index += 1) await next(page).click();
   await expect(page.locator('.log-entry').filter({ hasText: 'InternalComponent принят' })).toBeVisible();
+});
+
+test('Flyway: правка V1 задним числом роняет старт на validate', async ({ page }) => {
+  await page.goto('/#flyway');
+  await expect(page.getByRole('heading', { name: 'Миграции Flyway.' })).toBeVisible();
+  await expect(page.locator('.react-flow__node')).toHaveCount(5);
+  await page.getByRole('switch', { name: 'Правка V1 задним числом' }).click();
+  await expect(page.locator('.scene-badge')).toContainText('validate failed');
+  for (let index = 0; index < 5; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry.is-current')).toContainText('Контекст не поднялся');
+  await expect(page.locator('.flow-node.is-error').filter({ hasText: 'Flyway#migrate' })).toBeVisible();
+  await expect(page.locator('.flow-node.is-skipped').filter({ hasText: 'Таблица users' })).toBeVisible();
+  await page.getByRole('switch', { name: 'Правка V1 задним числом' }).click();
+  await page.getByRole('switch', { name: 'Новая V3__add_bio' }).click();
+  await expect(page.locator('.react-flow__node')).toHaveCount(6);
+  for (let index = 0; index < 6; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry.is-current')).toContainText('Приложение готово');
+  await expect(page.locator('.log-entry').filter({ hasText: 'Новая миграция V3' })).toBeVisible();
+});
+
+test('Lombok: без @Builder компиляция ломается на этапе compile', async ({ page }) => {
+  await page.goto('/#lombok');
+  await expect(page.getByRole('heading', { name: 'Компиляция с Lombok.' })).toBeVisible();
+  await expect(page.locator('.react-flow__node')).toHaveCount(5);
+  await page.getByRole('switch', { name: '@Builder на классе' }).click();
+  for (let index = 0; index < 5; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry.is-current')).toContainText('Компиляция сломана');
+  await expect(page.locator('.flow-node.is-error').filter({ hasText: 'Сгенерированное в работе' })).toBeVisible();
+  await page.getByRole('switch', { name: '@Builder на классе' }).click();
+  await page.getByRole('switch', { name: 'Рукописный эквивалент' }).click();
+  await expect(page.locator('.react-flow__node')).toHaveCount(6);
+  for (let index = 0; index < 6; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry.is-current')).toContainText('builder() скомпилирован и работает');
+  await expect(page.locator('.log-entry').filter({ hasText: 'Рукописный двойник' })).toBeVisible();
+});
+
+test('Validation: испорченные данные собирают 6 нарушений', async ({ page }) => {
+  await page.goto('/#validation');
+  await expect(page.getByRole('heading', { name: 'Bean Validation.' })).toBeVisible();
+  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await page.getByRole('switch', { name: 'Данные валидны' }).click();
+  await expect(page.locator('.scene-badge')).toContainText('6 violations');
+  for (let index = 0; index < 7; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry.is-current')).toContainText('Объект отклонён');
+  await expect(page.locator('.log-entry').filter({ hasText: 'address.city, address.zipCode' })).toBeVisible();
+  await page.getByRole('switch', { name: '@Valid на address' }).click();
+  await expect(page.locator('.react-flow__node')).toHaveCount(6);
+  await expect(page.locator('.scene-badge')).toContainText('4 violations');
 });
 
 test('Мобильная раскладка и справка доступны', async ({ page }) => {

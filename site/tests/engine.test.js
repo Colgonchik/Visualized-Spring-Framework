@@ -233,6 +233,71 @@ test('Report: без --debug консольный отчёт отключён', 
   assert.equal(result.steps.at(-1).status, 'success');
 });
 
+test('Lombok: builder сгенерирован, компиляция успешна', () => {
+  const result = simulate('lombok');
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.steps.at(-1).title, 'builder() скомпилирован и работает');
+  assert.match(result.steps.find((step) => step.nodeId === 'ast').detail, /builder\(\)/);
+});
+
+test('Lombok: без @Builder вызов builder() ломает компиляцию', () => {
+  const result = simulate('lombok', { builder: false });
+  assert.equal(result.outcome, 'error');
+  assert.equal(result.steps.find((step) => step.nodeId === 'usage').status, 'error');
+  assert.doesNotMatch(result.steps.find((step) => step.nodeId === 'ast').detail, /builder\(\) — всё/);
+});
+
+test('Lombok: рукописный эквивалент включается в маршрут по тогглу', () => {
+  const base = simulate('lombok');
+  assert.equal(base.steps.some((step) => step.nodeId === 'plain'), false);
+  const withPlain = simulate('lombok', { plain: true });
+  assert.equal(withPlain.steps.find((step) => step.nodeId === 'plain').title, 'Рукописный двойник');
+});
+
+test('Validation: валидные данные проходят без нарушений', () => {
+  const result = simulate('validation');
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.steps.find((step) => step.nodeId === 'violations').title, '0 нарушений');
+  assert.equal(result.steps.at(-1).title, 'Данные под контролем');
+});
+
+test('Validation: невалидные данные дают 6 нарушений и 400', () => {
+  const result = simulate('validation', { validData: false });
+  assert.equal(result.outcome, 'error');
+  assert.equal(result.steps.find((step) => step.nodeId === 'violations').title, '6 нарушений собраны');
+  assert.equal(result.steps.find((step) => step.nodeId === 'nested').status, 'error');
+  assert.equal(result.steps.at(-1).status, 'error');
+});
+
+test('Validation: без @Valid вложенный объект не проверяется', () => {
+  const result = simulate('validation', { validData: false, cascade: false });
+  assert.equal(result.steps.some((step) => step.nodeId === 'nested'), false);
+  assert.equal(result.steps.find((step) => step.nodeId === 'violations').title, '4 нарушений собраны');
+});
+
+test('Flyway: миграции применяются, история записывает checksum', () => {
+  const result = simulate('flyway');
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.steps.find((step) => step.nodeId === 'history').title, 'История: 2 записи');
+  assert.equal(result.steps.at(-1).title, 'Приложение готово');
+});
+
+test('Flyway: правка старого скрипта роняет старт на validate', () => {
+  const result = simulate('flyway', { modified: true });
+  assert.equal(result.outcome, 'error');
+  assert.equal(result.steps.find((step) => step.nodeId === 'engine').title, 'Validate failed');
+  assert.equal(result.steps.find((step) => step.nodeId === 'schema').status, 'skipped');
+  assert.equal(result.steps.at(-1).title, 'Контекст не поднялся');
+});
+
+test('Flyway: новая миграция V3 применяется поверх истории', () => {
+  const result = simulate('flyway', { newMigration: true });
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.steps.find((step) => step.nodeId === 'v3').title, 'Новая миграция V3');
+  assert.equal(result.steps.find((step) => step.nodeId === 'history').title, 'История: 3 записи');
+  assert.match(result.steps.find((step) => step.nodeId === 'engine').detail, /только V3/);
+});
+
 test('У каждого узла сцен есть сниппет кода из Java-модуля', () => {
   for (const [sceneId, scene] of Object.entries(SCENES)) {
     for (const node of scene.nodes) {
