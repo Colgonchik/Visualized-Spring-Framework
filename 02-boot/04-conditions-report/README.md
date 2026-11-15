@@ -2,6 +2,8 @@
 
 **Что показывает модуль:** как через HTTP посмотреть решения автоконфигурации и фактический список бинов. `visual.report.detailed` намеренно не задано, поэтому наш `detailedReportService` попадает в `negativeMatches`.
 
+> 🌐 **Интерактивная сцена:** [открыть на сайте](https://colgonchik.github.io/Visualized-Spring-Framework/#report)
+
 ---
 
 ## Концепция

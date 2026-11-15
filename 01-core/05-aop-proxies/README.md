@@ -2,6 +2,8 @@
 
 **Что показывает модуль:** как `@Transactional` превращает вызов метода в транзакцию, почему бин в runtime — не ваш класс, и почему `this.transfer()` молча отменяет всю магию. Транзакции видны без базы данных: самописный `LoggingTransactionManager` печатает `BEGIN`/`COMMIT`/`ROLLBACK`.
 
+> 🌐 **Интерактивная сцена:** [открыть на сайте](https://colgonchik.github.io/Visualized-Spring-Framework/#proxies)
+
 ---
 
 ## Концепция

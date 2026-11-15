@@ -259,3 +259,32 @@ test('Мобильная раскладка и справка доступны',
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.screenshot({ path: 'test-results/mobile.png', fullPage: true });
 });
+
+test('Панели: колонки сворачиваются и возвращаются', async ({ page }) => {
+  await page.goto('/#boot');
+  await expect(page.locator('.scenes-nav')).toBeVisible();
+  await page.getByRole('button', { name: 'Скрыть сценарии' }).click();
+  await expect(page.locator('.sidebar')).toBeHidden();
+  await expect(page.locator('.react-flow__node').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Показать сценарии' }).click();
+  await expect(page.locator('.scenes-nav')).toBeVisible();
+  await page.getByRole('button', { name: 'Скрыть инспектор' }).click();
+  await expect(page.locator('.inspector')).toBeHidden();
+  await page.getByRole('button', { name: 'Показать инспектор' }).click();
+  await expect(page.locator('.inspector')).toBeVisible();
+});
+
+test('Панели: перетаскивание разделителя меняет ширину колонки', async ({ page }) => {
+  await page.goto('/#boot');
+  const before = await page.locator('.sidebar').evaluate((el) => el.offsetWidth);
+  const edge = await page.locator('.column-edge--left').boundingBox();
+  await page.mouse.move(edge.x + edge.width / 2, edge.y + 300);
+  await page.mouse.down();
+  await page.mouse.move(edge.x + edge.width / 2 + 90, edge.y + 300, { steps: 6 });
+  await page.mouse.up();
+  const after = await page.locator('.sidebar').evaluate((el) => el.offsetWidth);
+  expect(after).toBeGreaterThan(before + 60);
+  await page.reload();
+  const restored = await page.locator('.sidebar').evaluate((el) => el.offsetWidth);
+  expect(restored).toBe(after);
+});

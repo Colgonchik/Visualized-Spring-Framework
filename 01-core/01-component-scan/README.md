@@ -2,6 +2,8 @@
 
 **Что показывает модуль:** что происходит между аннотацией `@SpringBootApplication` и моментом, когда контейнер «знает» о ваших `@Component`, `@Service` и `@Repository`.
 
+> 🌐 **Интерактивная сцена:** [открыть на сайте](https://colgonchik.github.io/Visualized-Spring-Framework/#scan)
+
 ---
 
 ## Концепция

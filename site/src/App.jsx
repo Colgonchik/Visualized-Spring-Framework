@@ -7,6 +7,25 @@ import { getSnippet } from './data/code.js';
 import { createSimulation, nodeStates } from './lib/simulation.js';
 
 const STORAGE_PREFIX = 'visual-sb-graph-v1:';
+const LAYOUT_KEY = 'visual-sb-layout-v1';
+const COLUMN_LIMITS = { sidebar: [170, 400], inspector: [230, 480] };
+
+function loadLayout() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(LAYOUT_KEY));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveLayout(layout) {
+  try {
+    window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+  } catch {
+    // хранилище недоступно — раскладка просто не сохранится
+  }
+}
 
 function sceneFromHash() {
   const id = window.location.hash.replace('#', '');
@@ -86,7 +105,15 @@ function App() {
   const [showLog, setShowLog] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [layout, setLayout] = useState(loadLayout);
+  const [resizing, setResizing] = useState(null);
   const logRef = useRef(null);
+  const sidebarRef = useRef(null);
+  const inspectorRef = useRef(null);
+  const sidebarWidth = typeof layout.sidebarWidth === 'number' ? layout.sidebarWidth : null;
+  const inspectorWidth = typeof layout.inspectorWidth === 'number' ? layout.inspectorWidth : null;
+  const sidebarCollapsed = Boolean(layout.sidebarCollapsed);
+  const inspectorCollapsed = Boolean(layout.inspectorCollapsed);
   const scene = SCENES[sceneId];
   const current = trace[cursor];
   const finished = trace.length > 0 && cursor === trace.length - 1;
@@ -120,6 +147,42 @@ function App() {
   useEffect(() => {
     saveSceneState(sceneId, { nodes, edges, options });
   }, [sceneId, nodes, edges, options]);
+
+  useEffect(() => {
+    saveLayout(layout);
+  }, [layout]);
+
+  function startColumnDrag(event, column) {
+    if (event.pointerType !== 'mouse' || event.button !== 0) return;
+    event.preventDefault();
+    const aside = column === 'sidebar' ? sidebarRef.current : inspectorRef.current;
+    if (!aside) return;
+    const startX = event.clientX;
+    const startWidth = aside.offsetWidth;
+    const direction = column === 'sidebar' ? 1 : -1;
+    const [min, max] = COLUMN_LIMITS[column];
+    setLayout((current) => ({ ...current, [column === 'sidebar' ? 'sidebarCollapsed' : 'inspectorCollapsed']: false }));
+    setResizing(column);
+    const onMove = (moveEvent) => {
+      const next = Math.min(max, Math.max(min, Math.round(startWidth + direction * (moveEvent.clientX - startX))));
+      setLayout((current) => ({ ...current, [column === 'sidebar' ? 'sidebarWidth' : 'inspectorWidth']: next }));
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      setResizing(null);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+  }
+
+  function toggleColumn(column) {
+    setLayout((current) => ({ ...current, [column === 'sidebar' ? 'sidebarCollapsed' : 'inspectorCollapsed']: !current[column === 'sidebar' ? 'sidebarCollapsed' : 'inspectorCollapsed'] }));
+  }
+
+  const layoutStyle = {
+    '--app-sidebar-w': sidebarCollapsed ? '0px' : sidebarWidth != null ? `${sidebarWidth}px` : undefined,
+    '--app-inspector-w': inspectorCollapsed ? '0px' : inspectorWidth != null ? `${inspectorWidth}px` : undefined,
+  };
 
   useEffect(() => {
     if (!playing || !trace.length || finished) {
@@ -247,7 +310,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${resizing ? ' is-col-resizing' : ''}`}>
       <header className="topbar">
         <a className="brand" href="#boot" aria-label="Visual SB — к запуску контейнера">
           <span className="brand-mark"><Icon name="logo" size={27} /></span>
@@ -257,8 +320,8 @@ function App() {
         <div className="topbar-right"><span className="proof">15 модулей <span>·</span> 53 теста</span><button className="text-button" onClick={() => setShowHelp(true)}><Icon name="info" size={16} />Как это работает</button></div>
       </header>
 
-      <div className="app-layout">
-        <aside className="sidebar">
+      <div className="app-layout" style={layoutStyle}>
+        <aside className={`sidebar${sidebarCollapsed ? ' is-collapsed' : ''}`} ref={sidebarRef}>
           <div className="sidebar-section scenes-nav">
             <span className="eyebrow">СЦЕНАРИИ</span>
             {Object.entries(SCENES).map(([id, item]) => (
@@ -287,6 +350,30 @@ function App() {
         </aside>
 
         <main className="main-stage">
+          <div className={`column-edge column-edge--left${sidebarCollapsed ? ' is-collapsed' : ''}${resizing === 'sidebar' ? ' is-resizing' : ''}`}
+            onPointerDown={sidebarCollapsed ? undefined : (event) => startColumnDrag(event, 'sidebar')}
+            onDoubleClick={() => toggleColumn('sidebar')}
+            role="separator" aria-orientation="vertical"
+            aria-label="Разделитель панели сценариев — потяните, чтобы изменить ширину, двойной клик скрывает панель"
+            title="Потяните, чтобы изменить ширину; двойной клик — скрыть панель">
+            <button className="column-toggle" type="button" aria-label={sidebarCollapsed ? 'Показать сценарии' : 'Скрыть сценарии'} aria-expanded={!sidebarCollapsed}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => toggleColumn('sidebar')}>
+              <Icon name={sidebarCollapsed ? 'chevron-right' : 'chevron-left'} size={13} />
+            </button>
+          </div>
+          <div className={`column-edge column-edge--right${inspectorCollapsed ? ' is-collapsed' : ''}${resizing === 'inspector' ? ' is-resizing' : ''}`}
+            onPointerDown={inspectorCollapsed ? undefined : (event) => startColumnDrag(event, 'inspector')}
+            onDoubleClick={() => toggleColumn('inspector')}
+            role="separator" aria-orientation="vertical"
+            aria-label="Разделитель инспектора — потяните, чтобы изменить ширину, двойной клик скрывает панель"
+            title="Потяните, чтобы изменить ширину; двойной клик — скрыть панель">
+            <button className="column-toggle" type="button" aria-label={inspectorCollapsed ? 'Показать инспектор' : 'Скрыть инспектор'} aria-expanded={!inspectorCollapsed}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => toggleColumn('inspector')}>
+              <Icon name={inspectorCollapsed ? 'chevron-left' : 'chevron-right'} size={13} />
+            </button>
+          </div>
           <div className="scene-heading">
             <div><div className="eyebrow scene-number">СЦЕНА {scene.number}<span className="eyebrow-line" />{scene.shortTitle.toUpperCase()}</div><h1>{scene.title}<span className="title-dot">.</span></h1><p>{scene.description}</p></div>
             <div className="model-label"><Icon name="cpu" size={17} /><span>Модель выполняется в браузере<br /><small>Java-примеры — в репозитории</small></span></div>
@@ -326,7 +413,7 @@ function App() {
           </section>
         </main>
 
-        <aside className="inspector">
+        <aside className={`inspector${inspectorCollapsed ? ' is-collapsed' : ''}`} ref={inspectorRef}>
           <section className="inspector-section settings-section">
             <div className="section-label"><span className="eyebrow">УСЛОВИЯ СЦЕНАРИЯ</span><Icon name="cpu" size={15} /></div>
             <SceneSettings scene={scene} options={options} onChange={changeOption} />
