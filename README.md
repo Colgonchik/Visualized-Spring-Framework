@@ -2,7 +2,7 @@
 
 Учебный проект, показывающий, как на самом деле работает Spring: от сканирования классов до автоконфигурации и прокси. Каждый модуль — это **запускаемый пример + диаграммы + трассировка по исходникам Spring**.
 
-**🌐 Живая версия: [colgonchik.github.io/Visualized-Spring-Framework](https://colgonchik.github.io/Visualized-Spring-Framework/)** — все модули превращены в интерактивные сцены: редактируемый граф, условия, журнал, UML-диаграмма и фрагменты реального Java-кода.
+**🌐 Живая версия: [colgonchik.github.io/Visualized-Spring-Framework](https://colgonchik.github.io/Visualized-Spring-Framework/)** — все модули превращены в интерактивные сцены: редактируемый граф, условия, журнал, UML-диаграмма, 3D-вид и пошаговый разбор простым языком.
 
 [![Интерактивная лаборатория Visual SB](docs/images/site-graph.png)](https://colgonchik.github.io/Visualized-Spring-Framework/)
 
@@ -87,11 +87,11 @@ mvn test
 
 <video src="docs/images/demo.webm" autoplay loop muted playsinline></video>
 
-Три вида одной трассировки — граф (скриншот выше), UML-диаграмма и 3D-полёт камерой по маршруту:
+Три способа смотреть одну трассировку — граф (скриншот выше), пошаговый текстовый разбор и 3D-полёт камерой по маршруту:
 
-| Последовательность | 3D |
+| По шагам | 3D |
 |---|---|
-| ![Диаграмма последовательности](docs/images/site-sequence.png) | ![3D-вид маршрута](docs/images/site-3d.png) |
+| ![Пошаговый разбор: каждый шаг простым языком](docs/images/site-reader.png) | ![3D-вид маршрута](docs/images/site-3d.png) |
 
 ```bash
 cd site

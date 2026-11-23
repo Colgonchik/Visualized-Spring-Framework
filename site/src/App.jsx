@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Sandbox from './components/Sandbox.jsx';
 import SequenceDiagram from './components/SequenceDiagram.jsx';
 import Scene3D from './components/Scene3D.jsx';
+import StepReader from './components/StepReader.jsx';
 import Icon, { NodeGlyph } from './components/Icon.jsx';
 import { PALETTE, SCENES, applyOptions, createGraph } from './data/scenes.js';
 import { getSnippet } from './data/code.js';
@@ -209,6 +210,12 @@ function App() {
   }, [cursor, showLog]);
 
   useEffect(() => {
+    if (viewMode !== 'reader' || trace.length) return;
+    const simulation = createSimulation(sceneId, nodes, edges, options);
+    setTrace(simulation.steps);
+  }, [viewMode, trace.length, sceneId, nodes, edges, options]);
+
+  useEffect(() => {
     const onKey = (event) => {
       if (event.key === 'Escape') {
         setShowHelp(false);
@@ -408,6 +415,7 @@ function App() {
                   <button role="tab" aria-selected={viewMode === 'graph'} className={viewMode === 'graph' ? 'is-active' : ''} onClick={() => setViewMode('graph')}>Граф</button>
                   <button role="tab" aria-selected={viewMode === 'sequence'} className={viewMode === 'sequence' ? 'is-active' : ''} onClick={() => setViewMode('sequence')}>Последовательность</button>
                   <button role="tab" aria-selected={viewMode === 'scene3d'} className={viewMode === 'scene3d' ? 'is-active' : ''} onClick={() => setViewMode('scene3d')}>3D</button>
+                  <button role="tab" aria-selected={viewMode === 'reader'} className={viewMode === 'reader' ? 'is-active' : ''} onClick={() => setViewMode('reader')}>По шагам</button>
                 </div>
               </div>
               <div className="canvas-actions"><span className="scene-badge">{scene.badge(options)}</span><button className="icon-button" onClick={copySceneLink} title="Поделиться сценой — скопировать ссылку с вашим графом" aria-label="Поделиться сценой"><Icon name={shareCopied ? 'check' : 'link'} size={16} /></button><button className="icon-button" onClick={resetScene} title="Сбросить сцену" aria-label="Сбросить сцену"><Icon name="reset" size={16} /></button></div>
@@ -419,6 +427,7 @@ function App() {
             )}
             {viewMode === 'sequence' && <SequenceDiagram nodes={nodes} trace={trace} cursor={cursor} onSelect={chooseStep} />}
             {viewMode === 'scene3d' && <Scene3D nodes={nodes} trace={trace} cursor={cursor} nodeStates={states} onSelectStep={chooseStep} onInspectNode={setSelectedNodeId} />}
+            {viewMode === 'reader' && <StepReader scene={scene} sceneId={sceneId} nodes={nodes} trace={trace} cursor={cursor} onSelect={chooseStep} />}
             <div className="playback">
               <button className={`run-button${playing ? ' is-playing' : ''}`} onClick={run}><Icon name={playing ? 'pause' : 'play'} size={16} />{playing ? 'Пауза' : finished ? 'Запустить снова' : trace.length ? 'Продолжить' : scene.verb}</button>
               <div className="step-buttons"><button className="icon-button" aria-label="Предыдущий шаг" disabled={cursor <= 0} onClick={() => chooseStep(cursor - 1)}><Icon name="previous" size={15} /></button><button className="icon-button" aria-label="Следующий шаг" disabled={finished} onClick={nextStep}><Icon name="next" size={15} /></button></div>

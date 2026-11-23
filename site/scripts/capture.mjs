@@ -21,9 +21,9 @@ await page.screenshot({ path: `${OUT}site-graph.png` });
 await page.getByRole('tab', { name: '3D' }).click();
 await page.waitForTimeout(1400);
 await page.screenshot({ path: `${OUT}site-3d.png` });
-await page.getByRole('tab', { name: 'Последовательность' }).click();
-await page.waitForTimeout(400);
-await page.screenshot({ path: `${OUT}site-sequence.png` });
+await page.getByRole('tab', { name: 'По шагам' }).click();
+await page.waitForTimeout(500);
+await page.screenshot({ path: `${OUT}site-reader.png` });
 await context.close();
 
 // Демо-ролик: полный прогон сцены Boot на 4×

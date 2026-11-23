@@ -317,3 +317,21 @@ test('Песочница: ссылка «Поделиться» восстана
   await page.getByRole('button', { name: 'Сбросить сцену' }).click();
   await expect(page.locator('.react-flow__node')).toHaveCount(8);
 });
+
+test('По шагам: текстовый разбор листается без запуска сценария', async ({ page }) => {
+  await page.goto('/#scan');
+  await page.getByRole('tab', { name: 'По шагам', exact: true }).click();
+  await expect(page.locator('.reader-step')).toHaveCount(6);
+  await page.getByRole('button', { name: 'Начать разбор' }).click();
+  await expect(page.getByText('ШАГ 01 / 06')).toBeVisible();
+  await expect(page.locator('.reader-actor')).toBeVisible();
+  await expect(page.locator('.reader-run code')).toContainText('mvn -pl 01-core/01-component-scan spring-boot:run');
+  await page.getByRole('button', { name: 'Вперёд' }).click();
+  await expect(page.getByText('ШАГ 02 / 06')).toBeVisible();
+  await page.locator('.reader-step').nth(4).click();
+  await expect(page.getByText('ШАГ 05 / 06')).toBeVisible();
+  await page.getByRole('button', { name: 'Назад' }).click();
+  await expect(page.getByText('ШАГ 04 / 06')).toBeVisible();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByText('ШАГ 05 / 06')).toBeVisible();
+});

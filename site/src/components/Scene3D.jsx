@@ -153,9 +153,9 @@ export default function Scene3D({ nodes, trace, cursor, nodeStates, onSelectStep
       const targetX = anchor.x * 0.8 + parallax.x * 36;
       const targetY = anchor.y * 0.8 + parallax.y * 26;
       const targetZ = anchor.z + CAM_DIST;
-      camera.x += (targetX - camera.x) * 0.09;
-      camera.y += (targetY - camera.y) * 0.09;
-      camera.z += (targetZ - camera.z) * 0.09;
+      camera.x += (targetX - camera.x) * 0.045;
+      camera.y += (targetY - camera.y) * 0.045;
+      camera.z += (targetZ - camera.z) * 0.05;
 
       context.clearRect(0, 0, size.width, size.height);
       context.strokeStyle = '#4a634c';
@@ -188,6 +188,7 @@ export default function Scene3D({ nodes, trace, cursor, nodeStates, onSelectStep
         const a = project(from.x, from.y, from.z);
         const b = project(to.x, to.y, to.z);
         if (a.dz < -FOCAL + 60 || b.dz < -FOCAL + 60) continue;
+        if (a.scale > 1.7 || b.scale > 1.7) continue;
         drawnEdges.push({ a, b, done: index <= cursor, current: index === cursor, response: trace[index].phase === 'response' });
       }
       drawnEdges.forEach((edge) => {
@@ -225,14 +226,16 @@ export default function Scene3D({ nodes, trace, cursor, nodeStates, onSelectStep
         let alpha = Math.min(1, Math.max(0.16, 1.08 - item.point.dz / 1300));
         if (future) alpha *= 0.55;
         if (status === 'skipped') alpha *= 0.7;
-        if (item.point.dz < 0) alpha *= Math.max(0, 1 + item.point.dz / 150);
-        drawCard(context, item.node, { ...item.spot, status }, item.point.x, item.point.y, Math.max(0.12, item.point.scale), alpha);
+        if (item.point.dz < 0) alpha *= Math.max(0, 1 + item.point.dz / 260);
+        if (item.point.scale > 1.3) alpha *= Math.max(0, 1 - (item.point.scale - 1.3) / 0.55);
+        const scale = Math.min(1.6, Math.max(0.12, item.point.scale));
+        drawCard(context, item.node, { ...item.spot, status }, item.point.x, item.point.y, scale, alpha);
         projected.current.push({
           id: item.node.id,
           x: item.point.x,
           y: item.point.y,
-          w: CARD_W * item.point.scale,
-          h: CARD_H * item.point.scale,
+          w: CARD_W * scale,
+          h: CARD_H * scale,
           visible: alpha > 0.05,
         });
       });
