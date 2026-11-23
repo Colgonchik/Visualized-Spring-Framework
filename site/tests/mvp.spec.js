@@ -64,6 +64,7 @@ test('HTTP: ошибка сервиса выполняет rollback', async ({ p
 
 test('Песочница: добавить, переименовать, соединить и удалить узел', async ({ page }) => {
   await page.goto('/#boot');
+  await page.getByRole('button', { name: 'Добавить компонент' }).click();
   await page.getByRole('button', { name: 'Добавить Component', exact: true }).click();
   await expect(page.locator('.react-flow__node')).toHaveCount(9);
   await page.getByRole('textbox', { name: 'Название узла' }).fill('AuditService');
@@ -166,6 +167,7 @@ test('Клавиатура: стрелки ходят по шагам трасс
 
 test('Песочница помнит изменённый граф после перезагрузки страницы', async ({ page }) => {
   await page.goto('/#boot');
+  await page.getByRole('button', { name: 'Добавить компонент' }).click();
   await page.getByRole('button', { name: 'Добавить Condition', exact: true }).click();
   await expect(page.locator('.react-flow__node')).toHaveCount(9);
   await page.reload();
@@ -260,33 +262,42 @@ test('Мобильная раскладка и справка доступны',
   await page.screenshot({ path: 'test-results/mobile.png', fullPage: true });
 });
 
-test('Панели: колонки сворачиваются и возвращаются', async ({ page }) => {
+test('Панели: инспектор сворачивается кнопкой на разделителе и в шапке', async ({ page }) => {
   await page.goto('/#boot');
-  await expect(page.locator('.scenes-nav')).toBeVisible();
-  await page.getByRole('button', { name: 'Скрыть сценарии' }).click();
-  await expect(page.locator('.sidebar')).toBeHidden();
-  await expect(page.locator('.react-flow__node').first()).toBeVisible();
-  await page.getByRole('button', { name: 'Показать сценарии' }).click();
-  await expect(page.locator('.scenes-nav')).toBeVisible();
+  await expect(page.locator('.inspector')).toBeVisible();
   await page.getByRole('button', { name: 'Скрыть инспектор' }).click();
   await expect(page.locator('.inspector')).toBeHidden();
+  await expect(page.locator('.react-flow__node').first()).toBeVisible();
   await page.getByRole('button', { name: 'Показать инспектор' }).click();
+  await expect(page.locator('.inspector')).toBeVisible();
+  await page.getByRole('button', { name: 'Панель инспектора' }).click();
+  await expect(page.locator('.inspector')).toBeHidden();
+  await page.getByRole('button', { name: 'Панель инспектора' }).click();
   await expect(page.locator('.inspector')).toBeVisible();
 });
 
-test('Панели: перетаскивание разделителя меняет ширину колонки', async ({ page }) => {
+test('Панели: перетаскивание разделителя меняет ширину инспектора', async ({ page }) => {
   await page.goto('/#boot');
-  const before = await page.locator('.sidebar').evaluate((el) => el.offsetWidth);
-  const edge = await page.locator('.column-edge--left').boundingBox();
+  const before = await page.locator('.inspector').evaluate((el) => el.offsetWidth);
+  const edge = await page.locator('.column-edge--right').boundingBox();
   await page.mouse.move(edge.x + edge.width / 2, edge.y + 300);
   await page.mouse.down();
-  await page.mouse.move(edge.x + edge.width / 2 + 90, edge.y + 300, { steps: 6 });
+  await page.mouse.move(edge.x + edge.width / 2 - 90, edge.y + 300, { steps: 6 });
   await page.mouse.up();
-  const after = await page.locator('.sidebar').evaluate((el) => el.offsetWidth);
+  const after = await page.locator('.inspector').evaluate((el) => el.offsetWidth);
   expect(after).toBeGreaterThan(before + 60);
   await page.reload();
-  const restored = await page.locator('.sidebar').evaluate((el) => el.offsetWidth);
+  const restored = await page.locator('.inspector').evaluate((el) => el.offsetWidth);
   expect(restored).toBe(after);
+});
+
+test('Сценарии: переключение из выпадающего списка в шапке', async ({ page }) => {
+  await page.goto('/#boot');
+  await expect(page.getByRole('button', { name: 'Сценарий: Запуск контейнера' })).toBeVisible();
+  await page.getByRole('button', { name: 'Сценарий: Запуск контейнера' }).click();
+  await page.getByRole('option', { name: /Миграции Flyway/ }).click();
+  await expect(page.getByRole('heading', { name: 'Миграции Flyway.' })).toBeVisible();
+  await expect(page.locator('.react-flow__node')).toHaveCount(5);
 });
 
 test('3D: вид трассировки выбирает шаг по клику по узлу', async ({ page }) => {
@@ -306,6 +317,7 @@ test('3D: вид трассировки выбирает шаг по клику 
 test('Песочница: ссылка «Поделиться» восстанавливает изменённый граф', async ({ page }) => {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/#boot');
+  await page.getByRole('button', { name: 'Добавить компонент' }).click();
   await page.getByRole('button', { name: 'Добавить Component', exact: true }).click();
   await expect(page.locator('.react-flow__node')).toHaveCount(9);
   await page.getByRole('button', { name: 'Поделиться сценой' }).click();

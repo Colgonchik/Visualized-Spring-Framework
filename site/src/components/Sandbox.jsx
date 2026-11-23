@@ -64,9 +64,9 @@ function Canvas(props) {
         connectionLineStyle={{ stroke: '#b8f34a', strokeWidth: 2 }}
         defaultEdgeOptions={{ type: 'smoothstep' }}
         fitView
-        fitViewOptions={{ padding: 0.17, maxZoom: 1 }}
+        fitViewOptions={{ padding: 0.05, maxZoom: 1.45 }}
         minZoom={0.25}
-        maxZoom={1.8}
+        maxZoom={2.4}
         colorMode="dark"
         nodesConnectable
         elementsSelectable

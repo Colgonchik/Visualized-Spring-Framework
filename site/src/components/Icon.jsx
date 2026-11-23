@@ -29,6 +29,7 @@ export default function Icon({ name, size = 18, className = '' }) {
     list: <><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="4.6" cy="6" r="1.1" /><circle cx="4.6" cy="12" r="1.1" /><circle cx="4.6" cy="18" r="1.1" /></>,
     'chevron-left': <path d="m14 6-6 6 6 6" />,
     'chevron-right': <path d="m10 6 6 6-6 6" />,
+    'chevron-down': <path d="m6 9 6 6 6-6" />,
   };
   return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icons[name] || icons.box}</svg>;
 }

@@ -11,7 +11,7 @@ import { buildShareUrl, decodeScenePayload, parseSceneHash } from './lib/share.j
 
 const STORAGE_PREFIX = 'visual-sb-graph-v1:';
 const LAYOUT_KEY = 'visual-sb-layout-v1';
-const COLUMN_LIMITS = { sidebar: [170, 400], inspector: [230, 480] };
+const INSPECTOR_LIMITS = [230, 480];
 
 function loadLayout() {
   try {
@@ -100,6 +100,40 @@ function SceneSettings({ scene, options, onChange }) {
   });
 }
 
+function SceneSwitcher({ sceneId }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDocClick = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDocClick);
+    return () => document.removeEventListener('pointerdown', onDocClick);
+  }, [open]);
+  const scene = SCENES[sceneId];
+  return (
+    <div className="scene-switcher" ref={ref}>
+      <button className="scene-switcher__button" type="button" aria-haspopup="listbox" aria-expanded={open} aria-label={`Сценарий: ${scene.title}`} onClick={() => setOpen((value) => !value)}>
+        <span className="scene-switcher__icon"><Icon name={scene.icon} size={17} /></span>
+        <span className="scene-switcher__text"><small>СЦЕНА {scene.number}</small><strong>{scene.title}</strong></span>
+        <Icon name="chevron-down" size={13} className="scene-switcher__chevron" />
+      </button>
+      {open && (
+        <div className="scene-switcher__menu" role="listbox" aria-label="Выбор сценария">
+          {Object.entries(SCENES).map(([id, item]) => (
+            <a key={id} href={`#${id}`} role="option" aria-selected={id === sceneId} className={`scene-switcher__option${id === sceneId ? ' is-current' : ''}`} onClick={() => setOpen(false)}>
+              <span className="scene-switcher__option-icon"><Icon name={item.icon} size={16} /></span>
+              <span className="scene-switcher__option-text"><small>{item.number} / {item.shortTitle}</small><strong>{item.title}</strong></span>
+              <Icon name="arrow" size={13} className="scene-switcher__option-arrow" />
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const [sceneId, setSceneId] = useState(sceneFromHash);
   const [graph, setGraph] = useState(() => createGraph(sceneFromHash()));
@@ -116,14 +150,12 @@ function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [copied, setCopied] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [layout, setLayout] = useState(loadLayout);
   const [resizing, setResizing] = useState(null);
   const logRef = useRef(null);
-  const sidebarRef = useRef(null);
   const inspectorRef = useRef(null);
-  const sidebarWidth = typeof layout.sidebarWidth === 'number' ? layout.sidebarWidth : null;
   const inspectorWidth = typeof layout.inspectorWidth === 'number' ? layout.inspectorWidth : null;
-  const sidebarCollapsed = Boolean(layout.sidebarCollapsed);
   const inspectorCollapsed = Boolean(layout.inspectorCollapsed);
   const scene = SCENES[sceneId];
   const current = trace[cursor];
@@ -164,20 +196,19 @@ function App() {
     saveLayout(layout);
   }, [layout]);
 
-  function startColumnDrag(event, column) {
+  function startColumnDrag(event) {
     if (event.pointerType !== 'mouse' || event.button !== 0) return;
     event.preventDefault();
-    const aside = column === 'sidebar' ? sidebarRef.current : inspectorRef.current;
+    const aside = inspectorRef.current;
     if (!aside) return;
     const startX = event.clientX;
     const startWidth = aside.offsetWidth;
-    const direction = column === 'sidebar' ? 1 : -1;
-    const [min, max] = COLUMN_LIMITS[column];
-    setLayout((current) => ({ ...current, [column === 'sidebar' ? 'sidebarCollapsed' : 'inspectorCollapsed']: false }));
-    setResizing(column);
+    const [min, max] = INSPECTOR_LIMITS;
+    setLayout((current) => ({ ...current, inspectorCollapsed: false }));
+    setResizing('inspector');
     const onMove = (moveEvent) => {
-      const next = Math.min(max, Math.max(min, Math.round(startWidth + direction * (moveEvent.clientX - startX))));
-      setLayout((current) => ({ ...current, [column === 'sidebar' ? 'sidebarWidth' : 'inspectorWidth']: next }));
+      const next = Math.min(max, Math.max(min, Math.round(startWidth - (moveEvent.clientX - startX))));
+      setLayout((current) => ({ ...current, inspectorWidth: next }));
     };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
@@ -187,12 +218,11 @@ function App() {
     window.addEventListener('pointerup', onUp, { once: true });
   }
 
-  function toggleColumn(column) {
-    setLayout((current) => ({ ...current, [column === 'sidebar' ? 'sidebarCollapsed' : 'inspectorCollapsed']: !current[column === 'sidebar' ? 'sidebarCollapsed' : 'inspectorCollapsed'] }));
+  function toggleInspector() {
+    setLayout((current) => ({ ...current, inspectorCollapsed: !current.inspectorCollapsed }));
   }
 
   const layoutStyle = {
-    '--app-sidebar-w': sidebarCollapsed ? '0px' : sidebarWidth != null ? `${sidebarWidth}px` : undefined,
     '--app-inspector-w': inspectorCollapsed ? '0px' : inspectorWidth != null ? `${inspectorWidth}px` : undefined,
   };
 
@@ -344,61 +374,26 @@ function App() {
           <span className="brand-mark"><Icon name="logo" size={27} /></span>
           <span><strong>VISUAL SB</strong><small>SPRING, БЕЗ МАГИИ</small></span>
         </a>
-        <div className="topbar-center"><span className="live-dot" />ИНТЕРАКТИВНАЯ ЛАБОРАТОРИЯ<span className="version">0.5</span></div>
-        <div className="topbar-right"><span className="proof">15 модулей <span>·</span> 53 теста</span><button className="text-button" onClick={() => setShowHelp(true)}><Icon name="info" size={16} />Как это работает</button></div>
+        <SceneSwitcher sceneId={sceneId} />
+        <div className="topbar-right">
+          <span className="version">0.5</span>
+          <span className="proof">15 модулей <span>·</span> 53 теста</span>
+          <button className="text-button" aria-pressed={!inspectorCollapsed} aria-label="Панель инспектора" title="Показать или скрыть правую панель" onClick={toggleInspector}><Icon name="sliders" size={15} />Инспектор</button>
+          <button className="text-button" onClick={() => setShowHelp(true)}><Icon name="info" size={16} />Как это работает</button>
+        </div>
       </header>
 
       <div className="app-layout" style={layoutStyle}>
-        <aside className={`sidebar${sidebarCollapsed ? ' is-collapsed' : ''}`} ref={sidebarRef}>
-          <div className="sidebar-section scenes-nav">
-            <span className="eyebrow">СЦЕНАРИИ</span>
-            {Object.entries(SCENES).map(([id, item]) => (
-              <a key={id} href={`#${id}`} className={`scene-link${sceneId === id ? ' is-current' : ''}`} aria-current={sceneId === id ? 'page' : undefined}>
-                <span className="scene-link__icon"><Icon name={item.icon} size={20} /></span>
-                <span><small>{item.number} / {item.shortTitle}</small><strong>{item.title}</strong></span>
-                <Icon name="arrow" size={15} className="scene-link__arrow" />
-              </a>
-            ))}
-          </div>
-          <div className="sidebar-section palette-section">
-            <div className="section-label"><span className="eyebrow">КОМПОНЕНТЫ</span><Icon name="plus" size={15} /></div>
-            <p className="sidebar-hint">Перетащите на холст<br />или нажмите, чтобы добавить</p>
-            <div className="palette">
-              {PALETTE.map((item) => (
-                <button key={item.kind} className={`palette-item palette-item--${item.category}`} draggable onDragStart={(event) => {
-                  event.dataTransfer.setData('application/visual-sb-node', item.kind);
-                  event.dataTransfer.effectAllowed = 'copy';
-                }} onClick={() => addNode(item)} title={`Добавить ${item.label}`} aria-label={`Добавить ${item.label}`}>
-                  <NodeGlyph kind={item.kind} size={20} /><span>{item.label}</span><small>{item.subtitle}</small>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="sidebar-foot"><span className="live-dot" />Граф можно изменять</div>
-        </aside>
-
         <main className="main-stage">
-          <div className={`column-edge column-edge--left${sidebarCollapsed ? ' is-collapsed' : ''}${resizing === 'sidebar' ? ' is-resizing' : ''}`}
-            onPointerDown={sidebarCollapsed ? undefined : (event) => startColumnDrag(event, 'sidebar')}
-            onDoubleClick={() => toggleColumn('sidebar')}
-            role="separator" aria-orientation="vertical"
-            aria-label="Разделитель панели сценариев — потяните, чтобы изменить ширину, двойной клик скрывает панель"
-            title="Потяните, чтобы изменить ширину; двойной клик — скрыть панель">
-            <button className="column-toggle" type="button" aria-label={sidebarCollapsed ? 'Показать сценарии' : 'Скрыть сценарии'} aria-expanded={!sidebarCollapsed}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => toggleColumn('sidebar')}>
-              <Icon name={sidebarCollapsed ? 'chevron-right' : 'chevron-left'} size={13} />
-            </button>
-          </div>
           <div className={`column-edge column-edge--right${inspectorCollapsed ? ' is-collapsed' : ''}${resizing === 'inspector' ? ' is-resizing' : ''}`}
-            onPointerDown={inspectorCollapsed ? undefined : (event) => startColumnDrag(event, 'inspector')}
-            onDoubleClick={() => toggleColumn('inspector')}
+            onPointerDown={inspectorCollapsed ? undefined : (event) => startColumnDrag(event)}
+            onDoubleClick={toggleInspector}
             role="separator" aria-orientation="vertical"
             aria-label="Разделитель инспектора — потяните, чтобы изменить ширину, двойной клик скрывает панель"
             title="Потяните, чтобы изменить ширину; двойной клик — скрыть панель">
             <button className="column-toggle" type="button" aria-label={inspectorCollapsed ? 'Показать инспектор' : 'Скрыть инспектор'} aria-expanded={!inspectorCollapsed}
               onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => toggleColumn('inspector')}>
+              onClick={toggleInspector}>
               <Icon name={inspectorCollapsed ? 'chevron-left' : 'chevron-right'} size={13} />
             </button>
           </div>
@@ -418,7 +413,27 @@ function App() {
                   <button role="tab" aria-selected={viewMode === 'reader'} className={viewMode === 'reader' ? 'is-active' : ''} onClick={() => setViewMode('reader')}>По шагам</button>
                 </div>
               </div>
-              <div className="canvas-actions"><span className="scene-badge">{scene.badge(options)}</span><button className="icon-button" onClick={copySceneLink} title="Поделиться сценой — скопировать ссылку с вашим графом" aria-label="Поделиться сценой"><Icon name={shareCopied ? 'check' : 'link'} size={16} /></button><button className="icon-button" onClick={resetScene} title="Сбросить сцену" aria-label="Сбросить сцену"><Icon name="reset" size={16} /></button></div>
+              <div className="canvas-actions">
+                <span className="scene-badge">{scene.badge(options)}</span>
+                <div className="palette-pop">
+                  {paletteOpen && <div className="palette-pop__backdrop" onClick={() => setPaletteOpen(false)} />}
+                  <button className="icon-button" onClick={() => setPaletteOpen((value) => !value)} aria-label="Добавить компонент" aria-expanded={paletteOpen} title="Добавить компонент на холст"><Icon name="plus" size={16} /></button>
+                  {paletteOpen && (
+                    <div className="palette-pop__menu">
+                      <span className="eyebrow">КОМПОНЕНТЫ · нажмите, чтобы добавить</span>
+                      <div className="palette-pop__grid">
+                        {PALETTE.map((item) => (
+                          <button key={item.kind} className={`palette-item palette-item--${item.category}`} onClick={() => { addNode(item); setPaletteOpen(false); }} aria-label={`Добавить ${item.label}`}>
+                            <NodeGlyph kind={item.kind} size={20} /><span>{item.label}</span><small>{item.subtitle}</small>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <button className="icon-button" onClick={copySceneLink} title="Поделиться сценой — скопировать ссылку с вашим графом" aria-label="Поделиться сценой"><Icon name={shareCopied ? 'check' : 'link'} size={16} /></button>
+                <button className="icon-button" onClick={resetScene} title="Сбросить сцену" aria-label="Сбросить сцену"><Icon name="reset" size={16} /></button>
+              </div>
             </div>
             {viewMode === 'graph' && (
               <Sandbox sceneId={sceneId} nodes={nodes} edges={edges} trace={trace} cursor={cursor} nodeStates={states}
