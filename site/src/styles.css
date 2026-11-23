@@ -118,6 +118,10 @@ h1 { font-size: clamp(26px, 2.35vw, 38px); font-weight: 500; letter-spacing: -1.
 .seq-row:hover .seq-message { stroke-width: 2.4; }
 .sequence-empty { height: 100%; min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #607b65; font-size: 11px; line-height: 1.7; text-align: center; padding: 24px; }
 .sequence-empty strong { color: #9fb795; font-size: 13px; font-weight: 600; }
+.scene3d-wrap { position: relative; flex: 1; min-height: 240px; overflow: hidden; background: radial-gradient(ellipse at 50% 42%, #17271b55, transparent 75%), #0c1310; }
+.scene3d-wrap canvas { display: block; cursor: pointer; }
+.scene3d-empty { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 60%, #0c1310e0, #0c131088); }
+.scene3d-hint { position: absolute; left: 14px; bottom: 11px; z-index: 5; display: flex; align-items: center; gap: 6px; font-size: 8px; color: #617a63; pointer-events: none; }
 .react-flow__renderer { outline: none; }
 .react-flow__node { font-family: inherit; }
 .react-flow__node:focus-visible { outline: none; }
@@ -345,6 +349,7 @@ h1 { font-size: clamp(26px, 2.35vw, 38px); font-weight: 500; letter-spacing: -1.
   .scene-heading p { font-size: 11px; max-width: 490px; }
   .workspace { min-height: 565px; }
   .sandbox-canvas { flex: none; height: 340px; min-height: 0; }
+  .scene3d-wrap { flex: none; height: 340px; min-height: 0; }
   .inspector { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; overflow: visible; border-left: none; border-top: 1px solid var(--line); padding: 25px 20px; }
   .inspector-section { margin: 0; padding-bottom: 10px; }
   .node-inspector { min-height: 0; border-bottom: none; }

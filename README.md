@@ -4,6 +4,8 @@
 
 **🌐 Живая версия: [colgonchik.github.io/Visualized-Spring-Framework](https://colgonchik.github.io/Visualized-Spring-Framework/)** — все модули превращены в интерактивные сцены: редактируемый граф, условия, журнал, UML-диаграмма и фрагменты реального Java-кода.
 
+[![Интерактивная лаборатория Visual SB](docs/images/site-graph.png)](https://colgonchik.github.io/Visualized-Spring-Framework/)
+
 ## Как читать модули
 
 Каждый модуль устроен двухслойно — для разного уровня подготовки:
@@ -81,7 +83,15 @@ mvn test
 
 **Опубликован на GitHub Pages: [colgonchik.github.io/Visualized-Spring-Framework](https://colgonchik.github.io/Visualized-Spring-Framework/)** — открывается прямо из браузера, деплоится автоматически из `main` через [GitHub Actions](.github/workflows/site-pages.yml).
 
-В `site/` находится визуальная лаборатория на React + Vite. Она не дублирует README, а превращает все 15 учебных модулей — от component scan до AOP-прокси, conditions report и миграций Flyway — в 13 интерактивных сцен: редактируемый граф, условия, журнал, UML-диаграмма последовательности и фрагменты реального Java-кода. Боковые колонки можно сворачивать и растягивать перетаскиванием разделителей.
+В `site/` находится визуальная лаборатория на React + Vite. Она не дублирует README, а превращает все 15 учебных модулей — от component scan до AOP-прокси, conditions report и миграций Flyway — в 13 интерактивных сцен: редактируемый граф, условия, журнал, UML-диаграмма последовательности, 3D-вид маршрута и фрагменты реального Java-кода. Боковые колонки можно сворачивать и растягивать перетаскиванием разделителей, изменённой сценой можно делиться ссылкой.
+
+<video src="docs/images/demo.webm" autoplay loop muted playsinline></video>
+
+Три вида одной трассировки — граф (скриншот выше), UML-диаграмма и 3D-полёт камерой по маршруту:
+
+| Последовательность | 3D |
+|---|---|
+| ![Диаграмма последовательности](docs/images/site-sequence.png) | ![3D-вид маршрута](docs/images/site-3d.png) |
 
 ```bash
 cd site

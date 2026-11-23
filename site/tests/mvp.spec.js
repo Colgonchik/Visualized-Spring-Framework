@@ -288,3 +288,32 @@ test('Панели: перетаскивание разделителя меня
   const restored = await page.locator('.sidebar').evaluate((el) => el.offsetWidth);
   expect(restored).toBe(after);
 });
+
+test('3D: вид трассировки выбирает шаг по клику по узлу', async ({ page }) => {
+  await page.goto('/#lifecycle');
+  await page.getByRole('tab', { name: '3D', exact: true }).click();
+  const canvas = page.locator('.scene3d-wrap canvas');
+  await expect(canvas).toBeVisible();
+  for (let index = 0; index < 3; index += 1) await next(page).click();
+  await expect(page.locator('.log-entry.is-current')).toHaveCount(1);
+  const box = await canvas.boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(page.getByRole('textbox', { name: 'Название узла' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Граф', exact: true }).click();
+  await expect(page.locator('.react-flow__node').first()).toBeVisible();
+});
+
+test('Песочница: ссылка «Поделиться» восстанавливает изменённый граф', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/#boot');
+  await page.getByRole('button', { name: 'Добавить Component', exact: true }).click();
+  await expect(page.locator('.react-flow__node')).toHaveCount(9);
+  await page.getByRole('button', { name: 'Поделиться сценой' }).click();
+  const url = await page.evaluate(() => navigator.clipboard.readText());
+  expect(url).toContain('#boot/');
+  await page.goto(url);
+  await expect(page.locator('.react-flow__node')).toHaveCount(9);
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Сбросить сцену' }).click();
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
+});

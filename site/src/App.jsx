@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Sandbox from './components/Sandbox.jsx';
 import SequenceDiagram from './components/SequenceDiagram.jsx';
+import Scene3D from './components/Scene3D.jsx';
 import Icon, { NodeGlyph } from './components/Icon.jsx';
 import { PALETTE, SCENES, applyOptions, createGraph } from './data/scenes.js';
 import { getSnippet } from './data/code.js';
 import { createSimulation, nodeStates } from './lib/simulation.js';
+import { buildShareUrl, decodeScenePayload, parseSceneHash } from './lib/share.js';
 
 const STORAGE_PREFIX = 'visual-sb-graph-v1:';
 const LAYOUT_KEY = 'visual-sb-layout-v1';
@@ -28,8 +30,15 @@ function saveLayout(layout) {
 }
 
 function sceneFromHash() {
-  const id = window.location.hash.replace('#', '');
+  const { id } = parseSceneHash(window.location.hash);
   return SCENES[id] ? id : 'boot';
+}
+
+function hashPayload() {
+  const { id, encoded } = parseSceneHash(window.location.hash);
+  if (!encoded) return null;
+  const data = decodeScenePayload(encoded);
+  return data && data.scene === id && SCENES[id] ? data : null;
 }
 
 function loadSceneState(sceneId) {
@@ -93,9 +102,9 @@ function SceneSettings({ scene, options, onChange }) {
 function App() {
   const [sceneId, setSceneId] = useState(sceneFromHash);
   const [graph, setGraph] = useState(() => createGraph(sceneFromHash()));
-  const [nodes, setNodes] = useState(() => loadSceneState(sceneFromHash())?.nodes ?? graph.nodes);
-  const [edges, setEdges] = useState(() => loadSceneState(sceneFromHash())?.edges ?? graph.edges);
-  const [options, setOptions] = useState(() => loadSceneState(sceneFromHash())?.options ?? { ...SCENES[sceneFromHash()].defaults });
+  const [nodes, setNodes] = useState(() => hashPayload()?.nodes ?? loadSceneState(sceneFromHash())?.nodes ?? graph.nodes);
+  const [edges, setEdges] = useState(() => hashPayload()?.edges ?? loadSceneState(sceneFromHash())?.edges ?? graph.edges);
+  const [options, setOptions] = useState(() => hashPayload()?.options ?? loadSceneState(sceneFromHash())?.options ?? { ...SCENES[sceneFromHash()].defaults });
   const [trace, setTrace] = useState([]);
   const [cursor, setCursor] = useState(-1);
   const [playing, setPlaying] = useState(false);
@@ -105,6 +114,7 @@ function App() {
   const [showLog, setShowLog] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const [layout, setLayout] = useState(loadLayout);
   const [resizing, setResizing] = useState(null);
   const logRef = useRef(null);
@@ -126,7 +136,8 @@ function App() {
     const syncScene = () => {
       const next = sceneFromHash();
       const nextGraph = createGraph(next);
-      const saved = loadSceneState(next);
+      const shared = hashPayload();
+      const saved = shared ?? loadSceneState(next);
       setSceneId(next);
       setNodes(saved?.nodes ?? nextGraph.nodes);
       setEdges(saved?.edges ?? nextGraph.edges);
@@ -309,6 +320,16 @@ function App() {
     window.setTimeout(() => setCopied(false), 1600);
   }
 
+  async function copySceneLink() {
+    try {
+      await navigator.clipboard.writeText(buildShareUrl(sceneId, { nodes, edges, options }));
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 1600);
+    } catch {
+      // буфер обмена недоступен — ссылка не скопируется, кнопка останется в исходном виде
+    }
+  }
+
   return (
     <div className={`app-shell${resizing ? ' is-col-resizing' : ''}`}>
       <header className="topbar">
@@ -316,7 +337,7 @@ function App() {
           <span className="brand-mark"><Icon name="logo" size={27} /></span>
           <span><strong>VISUAL SB</strong><small>SPRING, БЕЗ МАГИИ</small></span>
         </a>
-        <div className="topbar-center"><span className="live-dot" />ИНТЕРАКТИВНАЯ ЛАБОРАТОРИЯ<span className="version">MVP 0.4</span></div>
+        <div className="topbar-center"><span className="live-dot" />ИНТЕРАКТИВНАЯ ЛАБОРАТОРИЯ<span className="version">0.5</span></div>
         <div className="topbar-right"><span className="proof">15 модулей <span>·</span> 53 теста</span><button className="text-button" onClick={() => setShowHelp(true)}><Icon name="info" size={16} />Как это работает</button></div>
       </header>
 
@@ -386,17 +407,18 @@ function App() {
                 <div className="view-switch" role="tablist" aria-label="Вид трассировки">
                   <button role="tab" aria-selected={viewMode === 'graph'} className={viewMode === 'graph' ? 'is-active' : ''} onClick={() => setViewMode('graph')}>Граф</button>
                   <button role="tab" aria-selected={viewMode === 'sequence'} className={viewMode === 'sequence' ? 'is-active' : ''} onClick={() => setViewMode('sequence')}>Последовательность</button>
+                  <button role="tab" aria-selected={viewMode === 'scene3d'} className={viewMode === 'scene3d' ? 'is-active' : ''} onClick={() => setViewMode('scene3d')}>3D</button>
                 </div>
               </div>
-              <div className="canvas-actions"><span className="scene-badge">{scene.badge(options)}</span><button className="icon-button" onClick={resetScene} title="Сбросить сцену" aria-label="Сбросить сцену"><Icon name="reset" size={16} /></button></div>
+              <div className="canvas-actions"><span className="scene-badge">{scene.badge(options)}</span><button className="icon-button" onClick={copySceneLink} title="Поделиться сценой — скопировать ссылку с вашим графом" aria-label="Поделиться сценой"><Icon name={shareCopied ? 'check' : 'link'} size={16} /></button><button className="icon-button" onClick={resetScene} title="Сбросить сцену" aria-label="Сбросить сцену"><Icon name="reset" size={16} /></button></div>
             </div>
-            {viewMode === 'graph' ? (
+            {viewMode === 'graph' && (
               <Sandbox sceneId={sceneId} nodes={nodes} edges={edges} trace={trace} cursor={cursor} nodeStates={states}
                 onNodesChange={setNodes} onEdgesChange={setEdges} onConnect={(next) => { setEdges(next); resetPlayback(); }}
                 onGraphEdit={resetPlayback} onDropNode={addNode} onSelectNode={setSelectedNodeId} onEditStart={() => setPlaying(false)} />
-            ) : (
-              <SequenceDiagram nodes={nodes} trace={trace} cursor={cursor} onSelect={chooseStep} />
             )}
+            {viewMode === 'sequence' && <SequenceDiagram nodes={nodes} trace={trace} cursor={cursor} onSelect={chooseStep} />}
+            {viewMode === 'scene3d' && <Scene3D nodes={nodes} trace={trace} cursor={cursor} nodeStates={states} onSelectStep={chooseStep} onInspectNode={setSelectedNodeId} />}
             <div className="playback">
               <button className={`run-button${playing ? ' is-playing' : ''}`} onClick={run}><Icon name={playing ? 'pause' : 'play'} size={16} />{playing ? 'Пауза' : finished ? 'Запустить снова' : trace.length ? 'Продолжить' : scene.verb}</button>
               <div className="step-buttons"><button className="icon-button" aria-label="Предыдущий шаг" disabled={cursor <= 0} onClick={() => chooseStep(cursor - 1)}><Icon name="previous" size={15} /></button><button className="icon-button" aria-label="Следующий шаг" disabled={finished} onClick={nextStep}><Icon name="next" size={15} /></button></div>
